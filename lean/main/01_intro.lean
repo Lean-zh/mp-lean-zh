@@ -1,4 +1,3 @@
-/-
 -- # Introduction
 
 -- ## What's the goal of this book?
@@ -19,6 +18,7 @@
 -- [Functional Programming in Lean](https://leanprover.github.io/functional_programming_in_lean/)
 -- is a highly recommended source on that subject.
 
+/-
 # 介绍
 
 ## 本书的目的
