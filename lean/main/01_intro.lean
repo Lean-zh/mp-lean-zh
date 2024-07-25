@@ -1,23 +1,34 @@
 /-
-# Introduction
+-- # Introduction
 
-## What's the goal of this book?
+-- ## What's the goal of this book?
 
-This book aims to build up enough knowledge about metaprogramming in Lean 4 so
-you can be comfortable enough to:
+-- This book aims to build up enough knowledge about metaprogramming in Lean 4 so
+-- you can be comfortable enough to:
 
-* Start building your own meta helpers (defining new Lean notation such as `∑`,
-building new Lean commands such as `#check`, writing tactics such as `use`, etc.)
-* Read and discuss metaprogramming APIs like the ones in Lean 4 core and
-Mathlib4
+-- * Start building your own meta helpers (defining new Lean notation such as `∑`,
+-- building new Lean commands such as `#check`, writing tactics such as `use`, etc.)
+-- * Read and discuss metaprogramming APIs like the ones in Lean 4 core and
+-- Mathlib4
 
-We by no means intend to provide an exhaustive exploration/explanation of the
-entire Lean 4 metaprogramming API. We also don't cover the topic of monadic
-programming in Lean 4. However, we hope that the examples provided will be
-simple enough for the reader to follow and comprehend without a super deep
-understanding of monadic programming. The book
-[Functional Programming in Lean](https://leanprover.github.io/functional_programming_in_lean/)
-is a highly recommended source on that subject.
+-- We by no means intend to provide an exhaustive exploration/explanation of the
+-- entire Lean 4 metaprogramming API. We also don't cover the topic of monadic
+-- programming in Lean 4. However, we hope that the examples provided will be
+-- simple enough for the reader to follow and comprehend without a super deep
+-- understanding of monadic programming. The book
+-- [Functional Programming in Lean](https://leanprover.github.io/functional_programming_in_lean/)
+-- is a highly recommended source on that subject.
+
+# 介绍
+
+## 本书的目的
+
+本书的目的是在 Lean 4 中建立足够的元编程知识，你将学会：
+
+- 构建自己的元助手（定义新的 Lean 符号，如「∑」，构建新的 Lean 命令，如`#check`，编写策略，如`use`等）
+- 阅读和讨论元编程API，如Lean 4 core和Mathlib4中的API
+
+我们绝不打算对整个 Lean 4 元编程API进行详尽的解释。我们也不涉及单子（Monad）化编程的主题。我们希望示例足够简单，不太熟悉单子化编程也能跟上。强烈推荐[ Lean 中的函数式编程](https://www.leanprover.cn/fp-lean-zh/)作为这个主题的参考。
 
 ## Book structure
 
