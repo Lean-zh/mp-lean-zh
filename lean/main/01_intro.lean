@@ -1,112 +1,54 @@
--- # Introduction
-
--- ## What's the goal of this book?
-
--- This book aims to build up enough knowledge about metaprogramming in Lean 4 so
--- you can be comfortable enough to:
-
--- * Start building your own meta helpers (defining new Lean notation such as `∑`,
--- building new Lean commands such as `#check`, writing tactics such as `use`, etc.)
--- * Read and discuss metaprogramming APIs like the ones in Lean 4 core and
--- Mathlib4
-
--- We by no means intend to provide an exhaustive exploration/explanation of the
--- entire Lean 4 metaprogramming API. We also don't cover the topic of monadic
--- programming in Lean 4. However, we hope that the examples provided will be
--- simple enough for the reader to follow and comprehend without a super deep
--- understanding of monadic programming. The book
--- [Functional Programming in Lean](https://leanprover.github.io/functional_programming_in_lean/)
--- is a highly recommended source on that subject.
-
 /-
 # 介绍
 
 ## 本书的目的
 
-本书的目的是在 Lean 4 中建立足够的元编程知识，你将学会：
+本书的目的是教你 Lean 4 元编程，你将学会：
 
 - 构建自己的元助手（定义新的 Lean 符号，如「∑」，构建新的 Lean 命令，如`#check`，编写策略，如`use`等）
 - 阅读和讨论元编程API，如Lean 4 core和Mathlib4中的API
 
 我们绝不打算对整个 Lean 4 元编程API进行详尽的解释。我们也不涉及单子（Monad）化编程的主题。我们希望示例足够简单，不太熟悉单子化编程也能跟上。强烈推荐[ Lean 中的函数式编程](https://www.leanprover.cn/fp-lean-zh/)作为这个主题的参考。
 
-## Book structure
+## 本书的结构
 
-The book is organized in a way to build up enough context for the chapters that
-cover DSLs and tactics. Backtracking the pre-requisites for each chapter, the
-dependency structure is as follows:
+本书试着为DSL和策略建立足够的上下文来使你理解它们。章节依赖关系如下：
 
-* "Tactics" builds on top of "Macros" and "Elaboration"
-* "DSLs" builds on top of "Elaboration"
-* "Macros" builds on top of "`Syntax`"
-* "Elaboration" builds on top of "`Syntax`" and "`MetaM`"
-* "`MetaM`" builds on top of "Expressions"
+* 「策略」建立在「宏」和「繁饰」之上
+* 「DSL」建立在「繁饰」之上
+* 「宏」建立在「句法」之上
+* 「繁饰」建立在「句法」和「MetaM」之上
+* 「MetaM」建立在「表达式」之上
 
-After the chapter on tactics, you find a cheat sheet containing a wrap-up of key
-concepts and functions. And after that, there are some chapters with extra
-content, showing other applications of metaprogramming in Lean 4. Most chapters contain exercises at the end of the chapter - and at the end of the book you will have full solutions to those exercises.
+证明策略一章之后是包括关键概念和功能概述的备忘录。那之后，是一些章节额的外内容，展示了 Lean 4 元编程的其他应用。大多数章节的末尾都有习题，书的最后是习题答案。
 
-The rest of this chapter is a gentle introduction to what metaprogramming is,
-offering some small examples to serve as appetizers for what the book shall
-cover.
+本章的其余部分将简要介绍什么是元编程，并提供一些小示例开胃菜。
 
-Note: the code snippets aren't self-contained. They are supposed to be run/read
-incrementally, starting from the beginning of each chapter.
+注意：代码片段不是自包含的。它们应该从每章的开头开始，以增量方式运行/读取。
 
-## What does it mean to be in meta?
+## 「元」是什么?
 
-When we write code in most programming languages such as Python, C, Java or
-Scala, we usually have to stick to a pre-defined syntax otherwise the compiler
-or the interpreter won't be able to figure out what we're trying to say. In
-Lean, that would be defining an inductive type, implementing a function, proving
-a theorem, etc. The compiler, then, has to parse the code, build an AST (abstract
-syntax tree) and elaborate its syntax nodes into terms that can be processed by
-the language kernel. We say that such activities performed by the compiler are
-done in the __meta-level__, which will be studied throughout the book. And we
-also say that the common usage of the language syntax is done in the
-__object-level__.
+当我们用Python、C、Java或Scala等大多数编程语言编写代码时，通常遵循预定义的句法，否则编译器或解释器将无法理解代码。在Lean中，这些预定义句法是定义归纳类型、实现函数、证明定理等。然后，编译器必须解析代码，构建一个AST（抽象句法树），并将其句法节点阐释为语言内核可以处理的项。我们说编译器执行的这些活动是在**元**层面中完成的，这是本书的内容。我们还说，句法的常见用法是在**对象**层面中完成的。
 
-In most systems, the meta-level activities are done in a different language to
-the one that we use to write code. In Isabelle, the meta-level language is ML
-and Scala. In Coq, it's OCaml. In Agda, it's Haskell. In Lean 4, the meta code is
-mostly written in Lean itself, with a few components written in C++.
+在大多数系统中，元层面活动是用与我们当前用来编写代码的语言不同的语言完成的。在Isabelle中，元层面语言是ML和Scala。在Coq中，它是OCaml。在Agda中，是Haskell。在 Lean 4 中，元代码主要是用 Lean 本身编写的，还有一些用C++编写的组件。
 
-One cool thing about Lean, though, is that it allows us to define custom syntax
-nodes and implement meta-level routines to elaborate them in the
-very same development environment that we use to perform object-level
-activities. So for example, one can write notation to instantiate a
-term of a certain type and use it right away, in the same file! This concept is
-generally called
-[__reflection__](https://en.wikipedia.org/wiki/Reflective_programming). We can
-say that, in Lean, the meta-level is _reflected_ to the object-level.
+Lean 的一个很酷且方便的地方是，它允许我们用日常在对象层面写 Lean 的方式自定义句法节点，并实现元层面例程。例如，可以编写符号来实例化某种类型的项，并在同一个文件中立即使用它！这个概念通常被称为[**反射**](https://zh.wikipedia.org/wiki/%E5%8F%8D%E5%B0%84%E5%BC%8F%E7%BC%96%E7%A8%8B)。我们可以说，在Lean中，元层面被「反射」到对象层面。
 
-If you have done some metaprogramming in languages such as Ruby, Python or Javascript,
-it probably took the form of making use of predefined metaprogramming methods to define
-something on the fly. For example, in Ruby you can use `Class.new` and `define_method`
-to define a new class and its new method (with new code inside!) on the fly, as your program is executing.
+用Ruby、Python或Javascript等语言做元编程的方式可能是使用预定义的元编程方法来即时定义一些东西。例如，在Ruby中你可以使用 `Class.new` 和 `define_method` 用于在程序执行时即时定义一个新类及其新方法（其中包含新代码！）。
 
-We don't usually need to define new commands or tactics "on the fly" in Lean, but spiritually
-similar feats are possible with Lean metaprogramming and are equally straightforward, e.g. you can define
-a new Lean command using a simple one-liner `elab "#help" : command => do ...normal Lean code...`.
+在Lean中，我们通常不需要「即时地」定义新的命令或策略，但是在Lean元编程中能做类似的事，并且同样直接，例如，你可以使用简单的一行 `elab "#help" : command => do ...normal Lean code...`。
 
-In Lean, however, we will frequently want to directly manipulate
-Lean's CST (Concrete Syntax Tree, Lean's `Syntax` type) and
-Lean's AST (Abstract Syntax Tree, Lean's `Expr` type) instead of using "normal Lean code",
-especially when we're writing tactics. So Lean metaprogramming is more challenging to master -
-a large chunk of this book is contributed to studying these types and how we can manipulate them.
+然而，在Lean中，我们经常想要直接操作Lean的CST（具体句法树，Lean的 `Syntax` 类型）和Lean的AST（抽象句法树，Lean的 `Expr` 类型），而不是使用「正常的Lean代码」，特别是当我们编写证明策略（Tactic）时。因此，Lean元编程更难掌握。本书的大部分内容都是为了研究这些类型以及我们如何操作它们。
 
-## Metaprogramming examples
+## 元编程示例
 
-Next, we introduce several examples of Lean metaprogramming, so that you start getting a taste for
-what metaprogramming in Lean is, and what it will enable you to achieve. These examples are meant as
-mere illustrations - do not worry if you don't understand the details for now.
+下面这些例子仅作为展示。如果您现在不了解细节，请不要担心。
 
-### Introducing notation (defining new syntax)
+### 引入符号（定义新句法）
 
-Often one wants to introduce new notation, for example one more suitable for (a branch of) mathematics. For instance, in mathematics one would write the function adding `2` to a natural number as `x : Nat ↦ x + 2` or simply `x ↦ x + 2` if the domain can be inferred to be the natural numbers. The corresponding lean definitions `fun x : Nat => x + 2` and `fun x => x + 2` use `=>` which in mathematics means _implication_, so may be confusing to some.
-
-We can introduce notation using a `macro` which transforms our syntax to Lean's syntax (or syntax we previously defined). Here we introduce the `↦` notation for functions.
+通常，人们希望引入新的符号，例如更适合数学（的某分支）的符号。例如，在数学中，人们会将给一个自然数加 `2` 的函数写为 `x : Nat ↦ x + 2` 或简单地写为 `x ↦ x + 2` ，如果可以推断出定义域是自然数。相应的 Lean 定义 `fun x : Nat => x + 2` 和 `fun x => x + 2` 使用 `=>`，这在数学中表示**蕴涵**，因此可能会让一些人感到困惑。
 -/
+
 import Lean
 
 macro x:ident ":" t:term " ↦ " y:term : term => do
@@ -118,17 +60,18 @@ macro x:ident " ↦ " y:term : term => do
   `(fun $x  => $y)
 
 #eval (x ↦  x + 2) 2 -- 4
+
 /-!
 
-### Building a command
+### 构建指令
 
-Suppose we want to build a helper command `#assertType` which tells whether a
-given term is of a certain type. The usage will be:
+构建一个辅助命令 `#assertType`，它宣布给定的项是否属于某种类型。用法如下：
 
 `#assertType <term> : <type>`
 
-Let's see the code:
+代码是：
 -/
+
 elab "#assertType " termStx:term " : " typeStx:term : command =>
   open Lean Lean.Elab Command Term in
   liftTermElabM
@@ -147,18 +90,17 @@ elab "#assertType " termStx:term " : " typeStx:term : command =>
 #guard_msgs in --#
 #assertType [] : Nat
 
-/-! We started by using `elab` to define a `command` syntax. When parsed
-by the compiler, it will trigger the incoming computation.
+/-!
 
-At this point, the code should be running in the `CommandElabM` monad. We then
-use `liftTermElabM` to access the `TermElabM` monad, which allows us to use
-`elabType` and `elabTermEnsuringType` to build expressions out of the
-syntax nodes `typeStx` and `termStx`.
+`elab` 启动 `command` 句法的定义。当被编译器解析时，它将触发接下来的计算。
 
-First, we elaborate the expected type `tp : Expr`, then we use it to elaborate
-the term expression. The term should have the type `tp` otherwise an error will be
-thrown. We then discard the resulting term expression, since it doesn't matter to us here - we're calling
-`elabTermEnsuringType` as a sanity check.
+此时，代码应该在单子 `CommandElabM` 中运行。然后我们使用 `liftTermElabM` 来访问单子 `TermElabM`，这使我们能够使用 `elabType` 和 `elabTermEnsuringType` 从语法节点 `typeStx` 和 `termStx` 构建表达式。
+
+首先，我们繁饰预期的类型 `tp : Expr`，然后使用它来繁饰项表达式。该项应具有类型 `tp`，否则将引发错误。然后我们丢弃生成的项表达式，因为它对我们来说并不重要 - 我们调用 `elabTermEnsuringType` 作为健全性检查。
+
+我们还添加了 `synthesizeSyntheticMVarsNoPostponing`，它强制 Lean 立即繁饰元变量。如果没有该行，`#assertType [] : ?_` 将导致 `success`。
+
+如果到现在为止没有抛出任何错误，则繁饰成功，我们可以使用 `logInfo` 输出 success 。相反，如果捕获到某些错误，则我们使用 `throwError` 并显示相应的消息。
 
 We also add `synthesizeSyntheticMVarsNoPostponing`, which forces Lean to
 elaborate metavariables right away. Without that line, `#assertType [] : ?_`
