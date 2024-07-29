@@ -102,34 +102,19 @@ elab "#assertType " termStx:term " : " typeStx:term : command =>
 
 如果到现在为止没有抛出任何错误，则繁饰成功，我们可以使用 `logInfo` 输出 success 。相反，如果捕获到某些错误，则我们使用 `throwError` 并显示相应的消息。
 
-We also add `synthesizeSyntheticMVarsNoPostponing`, which forces Lean to
-elaborate metavariables right away. Without that line, `#assertType [] : ?_`
-would result in `success`.
+### 构建它的DSL和句法
 
-If no error is thrown until now then the elaboration succeeded and we can use
-`logInfo` to output "success". If, instead, some error is caught, then we use
-`throwError` with the appropriate message.
-
-### Building a DSL and a syntax for it
-
-Let's parse a classic grammar, the grammar of arithmetic expressions with
-addition, multiplication, naturals, and variables.  We'll define an AST
-(Abstract Syntax Tree) to encode the data of our expressions, and use operators
-`+` and `*` to denote building an arithmetic AST. Here's the AST that we will be
-parsing:
+让我们解析一个经典语法，即带有加法、乘法、自然数和变量的算术表达式的语法。我们将定义一个 AST（抽象语法树）来编码表达式的数据，并使用运算符 `+` 和 `*` 来表示构建算术 AST。以下是我们将要解析的 AST：
 -/
 
 inductive Arith : Type where
   | add : Arith → Arith → Arith -- e + f
   | mul : Arith → Arith → Arith -- e * f
-  | nat : Nat → Arith           -- constant
-  | var : String → Arith        -- variable
+  | nat : Nat → Arith           -- 常量
+  | var : String → Arith        -- 变量
 
-/-! Now we declare a syntax category to describe the grammar that we will be
-parsing. Notice that we control the precedence of `+` and `*` by giving a lower
-precedence weight to the `+` syntax than to the `*` syntax indicating that
-multiplication binds tighter than addition (the higher the number, the tighter
-the binding). This allows us to declare _precedence_ when defining new syntax.
+/-!
+现在我们声明一个句法类别（declare syntax category）来描述我们将要解析的语法。我们通过为 `+` 句法赋予比 `*` 句法更低的优先级权重来控制 `+` 和 `*` 的优先级，这表明乘法比加法绑定得更紧密（数字越高，绑定越紧密）。
 -/
 
 declare_syntax_cat arith
@@ -137,12 +122,12 @@ syntax num                        : arith -- nat for Arith.nat
 syntax str                        : arith -- strings for Arith.var
 syntax:50 arith:50 " + " arith:51 : arith -- Arith.add
 syntax:60 arith:60 " * " arith:61 : arith -- Arith.mul
-syntax " ( " arith " ) "          : arith -- bracketed expressions
+syntax " ( " arith " ) "          : arith -- 带括号表达式
 
--- Auxiliary notation for translating `arith` into `term`
+-- 将 arith 翻译为 term 的辅助符号
 syntax " ⟪ " arith " ⟫ " : term
 
--- Our macro rules perform the "obvious" translation:
+-- 我们的宏规则执行「显然的」翻译：
 macro_rules
   | `(⟪ $s:str ⟫)              => `(Arith.var $s)
   | `(⟪ $num:num ⟫)            => `(Arith.nat $num)
@@ -159,28 +144,26 @@ macro_rules
 #check ⟪ "x" + 20 ⟫
 -- Arith.add (Arith.var "x") (Arith.nat 20) : Arith
 
-#check ⟪ "x" + "y" * "z" ⟫ -- precedence
+#check ⟪ "x" + "y" * "z" ⟫ -- 优先级
 -- Arith.add (Arith.var "x") (Arith.mul (Arith.var "y") (Arith.var "z")) : Arith
 
-#check ⟪ "x" * "y" + "z" ⟫ -- precedence
+#check ⟪ "x" * "y" + "z" ⟫ -- 优先级
 -- Arith.add (Arith.mul (Arith.var "x") (Arith.var "y")) (Arith.var "z") : Arith
 
-#check ⟪ ("x" + "y") * "z" ⟫ -- brackets
+#check ⟪ ("x" + "y") * "z" ⟫ -- 括号
 -- Arith.mul (Arith.add (Arith.var "x") (Arith.var "y")) (Arith.var "z")
 
 /-!
-### Writing our own tactic
 
-Let's create a tactic that adds a new hypothesis to the context with a given
-name and postpones the need for its proof to the very end. It's similar to
-the `suffices` tactic from Lean 3, except that we want to make sure that the new
-goal goes to the bottom of the goal list.
+### 编写我们自己的策略
 
-It's going to be called `suppose` and is used like this:
+让我们创建一个策略，将一个给定名称的新假设添加到语境中，并将其证明推迟到最后。它类似于 Lean 3 中的 `suffices` 策略，只是我们要确保新目标位于目标列表的底部。
+
+它将被称为 `suppose`，用法如下：
 
 `suppose <name> : <type>`
 
-So let's see the code:
+让我们看看代码：
 -/
 
 open Lean Meta Elab Tactic Term in
@@ -196,19 +179,13 @@ elab "suppose " n:ident " : " t:term : tactic => do
 
 example : 0 + a = a := by
   suppose add_comm : 0 + a = a + 0
-  rw [add_comm]; rfl     -- closes the initial main goal
-  rw [Nat.zero_add]; rfl -- proves `add_comm`
+  rw [add_comm]; rfl     -- 证明主目标
+  rw [Nat.zero_add]; rfl -- 证明 `add_comm`
 
-/-! We start by storing the main goal in `mvarId` and using it as a parameter of
-`withMVarContext` to make sure that our elaborations will work with types that
-depend on other variables in the context.
+/-!
+我们首先将主要目标存储在 `mvarId` 中，并将其用作 `withMVarContext` 的参数，以确保我们的繁饰能够适用于依赖于语境中其他变量的类型。
 
-This time we're using `mkFreshExprMVar` to create a metavariable expression for
-the proof of `t`, which we can introduce to the context using `intro1P` and
-`assert`.
+这次我们使用 `mkFreshExprMVar` 为 `t` 的证明创建一个元变量表达式，我们可以使用 `intro1P` 和 `assert` 将其引入语境。
 
-To require the proof of the new hypothesis as a goal, we call `replaceMainGoal`
-passing a list with `p.mvarId!` in the head. And then we can use the
-`rotate_left` tactic to move the recently added top goal to the bottom.
-
+为了要求将新假设的证明作为目标，我们调用 `replaceMainGoal`，并在头部传递一个带有 `p.mvarId!` 的列表。然后我们可以使用 `rotate_left` 策略将最近添加的顶部目标移到底部。
 -/
