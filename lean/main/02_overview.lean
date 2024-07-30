@@ -69,7 +69,7 @@ Lean 编译过程可以总结为下图：
 
 在上图中，您可以看到 `notation`、`prefix`、`infix` 和 `postfix` -- 所有这些都是 `syntax` 和 `@[macro xxx] def ourMacro` 的组合，就像 `macro` 一样。这些命令与 `macro` 不同，因为您只能用它们定义特定形式的语法。
 
-所有这些命令都在 Lean 和 Mathlib 源代码中广泛使用，因此值得记住它们。然而，它们中的大多数都是语法糖，您可以通过研究以下 3 个低级命令的行为来了解它们的行为：`syntax`（**句法规则**）、`@[macro xxx] def ourMacro`（**宏**）和 `@[command_elab xxx] def ourElab`（**elab**，繁饰 elaborate 的简写）。
+所有这些命令都在 Lean 和 Mathlib 源代码中广泛使用，最好记住。然而，它们中的大多数都是语法糖，您可以通过研究以下 3 个低级命令的行为来了解它们的行为：`syntax`（**句法规则**）、`@[macro xxx] def ourMacro`（**宏**）和 `@[command_elab xxx] def ourElab`（**elab**，繁饰 elaborate 的简写）。
 
 举一个更具体的例子，假设我们正在实现一个 `#help` 命令，也可以写成 `#h`。然后我们可以按如下方式编写我们的**句法规则**、**宏**和**elab**：
 
@@ -77,7 +77,7 @@ Lean 编译过程可以总结为下图：
 <img width="900px" src="https://github.com/lakesare/lean4-metaprogramming-book/assets/7578559/adc1284f-3c0a-441d-91b8-7d87b6035688"/>
 </p>
 
-这张图不是按行看的 -- 将 `macro_rules` 与 `elab` 一起使用是完全没问题的。但是，假设我们使用 3 个低级命令来指定我们的 `#help` 命令（第一行）。完成此操作后，我们可以编写 `#help "#explode"` 或 `#h "#explode"`，这两个命令都会输出 `#explode` 命令的相当简洁的文档 -- 「**在 Fitch 表中显示证明**」。
+这张图不是按行看的 -- 将 `macro_rules` 与 `elab` 一起使用是完全没问题的。但是，假设我们使用 3 个低级命令来指定我们的 `#help` 命令（第一行）。完成此操作后，我们可以编写 `#help "#explode"` 或 `#h "#explode"`，这两个命令都会输出 `#explode` 命令的相当简洁的文档 -- 「**Displays proof in a Fitch table**」。
 
 如果我们编写 `#h "#explode"`，Lean 将遵循 `syntax (name := Shortcut_h)` ➤ `@[macro Shortcut_h] def helpMacro` ➤ `syntax (name := default_h)` ➤ `@[command_elab default_h] def helpElab` 路径。
 
@@ -92,7 +92,7 @@ elab 函数也可以是不同的类型，例如用于实现 `#help` 的 `Command
 - `CommandElab` 代表 **Syntax → CommandElabM Unit**，因此它不应该返回任何内容。
 - `Tactic` 代表 **Syntax → TacticM Unit**，因此它不应该返回任何内容。
 
-这对应于我们对 Lean 中的项、命令和策略的直观理解 - 项在执行时返回特定值，命令修改环境或打印某些内容，策略修改证明状态。
+这对应于我们对 Lean 中的项、命令和策略的直观理解 -- 项在执行时返回特定值，命令修改环境或打印某些内容，策略修改证明状态。
 
 ## 执行顺序：句法规则、宏、elab
 
@@ -118,7 +118,7 @@ syntax (name := zzz) "blue" : command
 @[command_elab zzz] def blueElab : CommandElab := λ stx =>
   Lean.logInfo "finally, blue!"
 
-red -- finally, blue!
+red -- 蓝色下划线输出：finally, blue!
 
 /-
 流程如下：
@@ -133,9 +133,9 @@ red -- finally, blue!
     找不到任何名称为 `zzz` 的宏来应用，
     因此应用 `@[command_elab zzz]`。🎉。
 
-可以从这些第一性原理中理解语法糖（`elab`、`macro` 等）的行为。
+可以从这些基本原理中理解语法糖（`elab`、`macro` 等）的行为。
 
-## `Syntax`/`Expr`/可执行代码之间的手动转换
+## `Syntax` / `Expr` / 可执行代码之间的手动转换
 
 如果您使用 `syntax`、`macro` 和 `elab` 命令，Lean 将自动为您执行上述 **解析**/**繁饰**/**求值** 步骤，但是，当您编写策略时，您也经常需要手动执行这些转换。您可以使用以下函数来实现：
 
