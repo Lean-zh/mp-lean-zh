@@ -1,104 +1,104 @@
 /-
-# Overview
+# 概述
 
-In this chapter, we will provide an overview of the primary steps involved in the Lean compilation process, including parsing, elaboration, and evaluation. As alluded to in the introduction, metaprogramming in Lean involves plunging into the heart of this process. We will explore the fundamental objects involved, `Expr` and `Syntax`, learn what they signify, and discover how one can be turned into another (and back!).
+在本章中，我们将概述 Lean 编译过程中涉及的主要步骤，包括解析（parsing）、繁饰（elaboration）和求值（evaluation）。正如介绍中提到的，Lean 中的元编程需要深入这个过程的核心。我们将探索所涉及的基本对象 `Expr` 和 `Syntax`，了解它们的含义，并发现如何将一个对象转换为另一个对象（并转换回来！）。
 
-In the next chapters, you will learn the particulars. As you read on, you might want to return to this chapter occasionally to remind yourself of how it all fits together.
+后面的章节会介绍细节，你可以之后回顾本章，以提醒自己这些组件是如何组合在一起的。
 
-## Connection to compilers
+## 与编译器的连接
 
-Metaprogramming in Lean is deeply connected to the compilation steps - parsing, syntactic analysis, transformation, and code generation.
+Lean 中的元编程密切关系到编译步骤 -- 解析、句法分析、转换和代码生成。
 
-> Lean 4 is a reimplementation of the Lean theorem prover in Lean itself. The new compiler produces C code, and users can now implement efficient proof automation in Lean, compile it into efficient C code, and load it as a plugin. In Lean 4, users can access all internal data structures used to implement Lean by merely importing the Lean package.
+> Lean 4 是用 Lean 本身重新实现的 Lean 定理证明器。新的编译器生成 C 代码，用户现在可以在 Lean 中实现高效的证明自动化，将其编译为高效的 C 代码，并将其作为插件加载。在 Lean 4 中，用户只需导入 Lean 包即可访问用于实现 Lean 的所有内部数据结构。
 >
-> Leonardo de Moura, Sebastian Ullrich ([The Lean 4 Theorem Prover and Programming Language](https://pp.ipd.kit.edu/uploads/publikationen/demoura21lean4.pdf))
+> Leonardo de Moura、Sebastian Ullrich ([Lean 4 定理证明器和编程语言](https://pp.ipd.kit.edu/uploads/publikationen/demoura21lean4.pdf))
 
-The Lean compilation process can be summed up in the following diagram:
+Lean 编译过程可以总结为下图：
 
 <p align="center">
 <img width="700px" src="https://github.com/arthurpaulino/lean4-metaprogramming-book/assets/7578559/78867009-2624-46a3-a1f4-f488fd25d494"/>
 </p>
 
-First, we will start with Lean code as a string. Then we'll see it become a `Syntax` object, and then an `Expr` object. Then finally we can execute it.  
+首先从字符串形式的 Lean 代码开始。然后它变成 `Syntax` 对象，然后是 `Expr` 对象。最后执行它。
 
-So, the compiler sees a string of Lean code, say `"let a := 2"`, and the following process unfolds:
+因此，编译器看到一串 Lean 代码，例如 `"let a := 2"`，然后展开以下过程：
 
-1. **apply a relevant syntax rule** (`"let a := 2"` ➤ `Syntax`)  
+1. **应用相关句法规则** (`"let a := 2"` ➤ `Syntax`)
 
-    During the parsing step, Lean tries to match a string of Lean code to one of the declared **syntax rules** in order to turn that string into a `Syntax` object. **Syntax rules** are basically glorified regular expressions - when you write a Lean string that matches a certain **syntax rule**'s regex, that rule will be used to handle subsequent steps.
+在解析步骤中，Lean 尝试将一串 Lean 代码与声明的**句法规则**之一进行匹配，以便将该字符串转换为 `Syntax` 对象。**句法规则**基本上是美化的正则表达式 -- 当您编写与某个**句法规则**的正则表达式匹配的 Lean 字符串时，该规则将用于处理后续步骤。
 
-2. **apply all macros in a loop** (`Syntax` ➤ `Syntax`)  
+2. **循环应用所有宏** (`Syntax` ➤ `Syntax`)
 
-    During the elaboration step, each **macro** simply turns the existing `Syntax` object into some new `Syntax` object. Then, the new `Syntax` is processed similarly (repeating steps 1 and 2), until there are no more **macros** to apply.
+在繁饰步骤中，每个**宏**只是将现有的 `Syntax` 对象转换为某个新的 `Syntax` 对象。然后，新的 `Syntax` 以类似的方式处理（重复步骤 1 和 2），直到没有更多**宏**可应用。
 
-3. **apply a single elab** (`Syntax` ➤ `Expr`)  
+3. **应用单个 elab** (`Syntax` ➤ `Expr`)
 
-    Finally, it's time to infuse your syntax with meaning - Lean finds an **elab** that's matched to the appropriate **syntax rule** by the `name` argument (**syntax rules**, **macros** and **elabs** all have this argument, and they must match). The newfound **elab** returns a particular `Expr` object.
-    This completes the elaboration step.
+最后，是时候为你的句法注入意义了 -- Lean 通过 `name` 参数找到与相应**句法规则**匹配的 **elab**（**句法规则**、**宏** 和 **elabs** 都有此参数，并且它们必须匹配）。新发现的 **elab** 返回特定的 `Expr` 对象。
 
-The expression (`Expr`) is then converted into executable code during the evaluation step - we don't have to specify that in any way, the Lean compiler will handle doing so for us.
+这样就完成了繁饰步骤。​​
 
-## Elaboration and delaboration
+然后，表达式（`Expr`）在求值步骤中转换为可执行代码——我们不必以任何方式指定，Lean 编译器将为我们处理此操作。
 
-Elaboration is an overloaded term in Lean. For example, you might encounter the following usage of the word "elaboration", wherein the intention is *"taking a partially-specified expression and inferring what is left implicit"*:
+## 繁饰和反繁饰
 
+繁饰（elaboration）是 Lean 中一个被重载的术语。例如，您可能会遇到以下用法，其意图是「采用部分指定的表达式并推断出剩下的隐含内容」：
 
-> When you enter an expression like `λ x y z, f (x + y) z` for Lean to process, you are leaving information implicit. For example, the types of `x`, `y`, and `z` have to be inferred from the context, the notation `+` may be overloaded, and there may be implicit arguments to `f` that need to be filled in as well.
+> 当您输入一个表达式，如 `λ x y z, f (x + y) z` 供 Lean 处理时，您隐含了一些信息。例如，必须从上下文中推断出 `x`、`y` 和 `z` 的类型，符号 `+` 可能被重载，并且 `f` 可能有需要补全的隐参数。
 >
-> The process of *taking a partially-specified expression and inferring what is left implicit* is known as **elaboration**. Lean's **elaboration** algorithm is powerful, but at the same time, subtle and complex. Working in a system of dependent type theory requires knowing what sorts of information the **elaborator** can reliably infer, as well as knowing how to respond to error messages that are raised when the elaborator fails. To that end, it is helpful to have a general idea of how Lean's **elaborator** works.
+> 「采用部分指定的表达式并推断出剩下的隐含内容」的过程称为**繁饰**。Lean 的**繁饰**算法功能强大，但同时又微妙而复杂。在依值类型论系统中工作需要知道**繁饰器**可以可靠地推断哪些类型的信息，以及知道如何响应繁饰器失败时引发的错误消息。为此，了解 Lean 的**繁饰器**如何工作会很有帮助。
 >
-> When Lean is parsing an expression, it first enters a preprocessing phase. First, Lean inserts "holes" for implicit arguments. If term t has type `Π {x : A}, P x`, then t is replaced by `@t _` everywhere. Then, the holes — either the ones inserted in the previous step or the ones explicitly written by the user — in a term are instantiated by metavariables `?M1`, `?M2`, `?M3`, .... Each overloaded notation is associated with a list of choices, that is, the possible interpretations. Similarly, Lean tries to detect the points where a coercion may need to be inserted in an application `s t`, to make the inferred type of t match the argument type of `s`. These become choice points too. If one possible outcome of the elaboration procedure is that no coercion is needed, then one of the choices on the list is the identity.  
+> 当 Lean 解析表达式时，它首先进入预处理阶段。首先，Lean 为隐参数插入「洞」。如果项 t 的类型为 `Π {x : A}, P x`，则 t 在所有地方都将被 `@t _` 替换。然后，项中的洞（无论是在上一步中插入的洞还是用户明确编写的洞）由元变量 `?M1`、`?M2`、`?M3` 等实例化。每个重载符号都与一个选项列表相关联，即可能的解释。类似地，Lean 尝试检测在一个应用 `s t` 中可能需要插入强制转换的点，以使推断出的 t 类型与 `s` 的参数类型相匹配。这些也成为选择点。如果繁饰过程的一个可能结果是不需要强制转换，那么列表中的选择之一就是恒等式。
 >
-> ([Theorem Proving in Lean 2](http://leanprover.github.io/tutorial/08_Building_Theories_and_Proofs.html))
+> ([Lean 2 中的定理证明](http://leanprover.github.io/tutorial/08_Building_Theories_and_Proofs.html))
 
-We, on the other hand, just defined elaboration as the process of turning `Syntax` objects into `Expr` objects.
+另一方面，我们只是将繁饰定义为将 `Syntax` 对象转换为 `Expr` 对象的过程。
 
-These definitions are not mutually exclusive - elaboration is, indeed, the transformation of `Syntax` into `Expr`s - it's just so that for this transformation to happen we need a lot of trickery - we need to infer implicit arguments, instantiate metavariables, perform unification, resolve identifiers, etc. etc. - and these actions can be referred to as "elaboration" on their own; similarly to how "checking if you turned off the lights in your apartment" (metavariable instantiation) can be referred to as "going to school" (elaboration).
+这些定义并不相互排斥。此处定义繁饰是将 `Syntax` 转换为 `Expr`，只是为了实现这种转换，我们需要很多技巧。我们需要推断隐式参数、实例化元变量、执行统一、解析标识符等。其他地方只是把这些繁饰操作的一部分也称为繁饰。
 
-There also exists a process opposite to elaboration in Lean - it's called, appropriately enough, delaboration. During delaboration, an `Expr` is turned into a `Syntax` object; and then the formatter turns it into a `Format` object, which can be displayed in Lean's infoview. Every time you log something to the screen, or see some output upon hovering over `#check`, it's the work of the delaborator.
+在 Lean 中，还存在一个与繁饰相反的反繁饰（delaboration）过程。在反繁饰过程中，一个 `Syntax` 被转换成一个 `Expr` 对象；然后格式化程序将其转换成一个 `Format` 对象，该对象可以在 Lean 的信息视图中显示。每次您将某些内容记录到屏幕上，或者将鼠标悬停在 `#check` 上时看到一些输出，这都是反繁饰器的工作。
 
-Throughout this book you will see references to the elaborator; and in the "Extra: Pretty Printing" chapter you can read about delaborators.
+本书中，您将看到对繁饰器的引用；在「附加内容：美观打印」一章中，您可以阅读有关反繁饰器的内容。
 
-## 3 essential commands and their syntax sugars
+## 3个必要命令及其语法糖
 
-Now, when you're reading Lean source code, you will see 11(+?) commands specifying the **parsing**/**elaboration**/**evaluation** process:
+现在，当你阅读 Lean 源代码时，你会看到 11 (或更多) 条命令指定**解析**/**繁饰**/**求值**过程：
 
 <p align="center">
 <img width="500px" src="https://github.com/arthurpaulino/lean4-metaprogramming-book/assets/7578559/9b83f06c-49c4-4d93-9d42-72e0499ae6c8"/>
 </p>
 
-In the image above, you see `notation`, `prefix`, `infix`, and `postfix` - all of these are combinations of `syntax` and `@[macro xxx] def ourMacro`, just like `macro`. These commands differ from `macro` in that you can only define syntax of a particular form with them.
+在上图中，您可以看到 `notation`、`prefix`、`infix` 和 `postfix` -- 所有这些都是 `syntax` 和 `@[macro xxx] def ourMacro` 的组合，就像 `macro` 一样。这些命令与 `macro` 不同，因为您只能用它们定义特定形式的语法。
 
-All of these commands are used in Lean and Mathlib source code extensively, so it's well worth memorizing them. Most of them are syntax sugars, however, and you can understand their behaviour by studying the behaviour of the following 3 low-level commands: `syntax` (a **syntax rule**), `@[macro xxx] def ourMacro` (a **macro**), and `@[command_elab xxx] def ourElab` (an **elab**).
+所有这些命令都在 Lean 和 Mathlib 源代码中广泛使用，因此值得记住它们。然而，它们中的大多数都是语法糖，您可以通过研究以下 3 个低级命令的行为来了解它们的行为：`syntax`（**句法规则**）、`@[macro xxx] def ourMacro`（**宏**）和 `@[command_elab xxx] def ourElab`（**elab**，繁饰 elaborate 的简写）。
 
-To give a more concrete example, imagine we're implementing a `#help` command, that can also be written as `#h`. Then we can write our **syntax rule**, **macro**, and **elab** as follows:
+举一个更具体的例子，假设我们正在实现一个 `#help` 命令，也可以写成 `#h`。然后我们可以按如下方式编写我们的**句法规则**、**宏**和**elab**：
 
 <p align="center">
 <img width="900px" src="https://github.com/lakesare/lean4-metaprogramming-book/assets/7578559/adc1284f-3c0a-441d-91b8-7d87b6035688"/>
 </p>
 
-This image is not supposed to be read row by row - it's perfectly fine to use `macro_rules` together with `elab`. Suppose, however, that we used the 3 low-level commands to specify our `#help` command (the first row). After we've done this, we can write `#help "#explode"` or `#h "#explode"`, both of which will output a rather parsimonious documentation for the `#explode` command - *"Displays proof in a Fitch table"*.
+这张图不是按行看的 -- 将 `macro_rules` 与 `elab` 一起使用是完全没问题的。但是，假设我们使用 3 个低级命令来指定我们的 `#help` 命令（第一行）。完成此操作后，我们可以编写 `#help "#explode"` 或 `#h "#explode"`，这两个命令都会输出 `#explode` 命令的相当简洁的文档 -- 「**在 Fitch 表中显示证明**」。
 
-If we write `#h "#explode"`, Lean will travel the `syntax (name := shortcut_h)` ➤ `@[macro shortcut_h] def helpMacro` ➤ `syntax (name := default_h)` ➤ `@[command_elab default_h] def helpElab` route.  
-If we write `#help "#explode"`, Lean will travel the `syntax (name := default_h)` ➤ `@[command_elab default_h] def helpElab` route.
+如果我们编写 `#h "#explode"`，Lean 将遵循 `syntax (name := Shortcut_h)` ➤ `@[macro Shortcut_h] def helpMacro` ➤ `syntax (name := default_h)` ➤ `@[command_elab default_h] def helpElab` 路径。
 
-Note how the matching between **syntax rules**, **macros**, and **elabs** is done via the `name` argument. If we used `macro_rules` or other syntax sugars, Lean would figure out the appropriate `name` arguments on its own.
+如果我们写 `#help "#explode"`，Lean 将遵循 `syntax (name := default_h)` ➤ `@[command_elab default_h] def helpElab` 路径。
 
-If we were defining something other than a command, instead of `: command` we could write `: term`, or `: tactic`, or any other syntax category.  
-The elab function can also be of different types - the `CommandElab` we used to implement `#help` - but also `TermElab` and `Tactic`:  
+请注意，**句法规则**、**宏** 和 **elab** 之间的匹配是通过 `name` 参数完成的。如果我们使用 `macro_rules` 或其他语法糖，Lean 将自行找出适当的 `name` 参数。
 
-- `TermElab` stands for **Syntax → Option Expr → TermElabM Expr**, so the elab function is expected to return the **Expr** object.  
-- `CommandElab` stands for **Syntax → CommandElabM Unit**, so it shouldn't return anything.  
-- `Tactic` stands for **Syntax → TacticM Unit**, so it shouldn't return anything either.  
+如果我们定义的不是命令，我们可以写 `: term`、`: tactic` 或任何其他语法类别来替换 `: command`。
+elab 函数也可以是不同的类型，例如用于实现 `#help` 的 `CommandElab` 还有 `TermElab` 和 `Tactic`:
 
-This corresponds to our intuitive understanding of terms, commands and tactics in Lean - terms return a particular value upon execution, commands modify the environment or print something out, and tactics modify the proof state.
+- `TermElab` 代表 **Syntax → Option Expr → TermElabM Expr**，因此 elab 函数应该返回 **Expr** 对象。
+- `CommandElab` 代表 **Syntax → CommandElabM Unit**，因此它不应该返回任何内容。
+- `Tactic` 代表 **Syntax → TacticM Unit**，因此它不应该返回任何内容。
 
-## Order of execution: syntax rule, macro, elab
+这对应于我们对 Lean 中的项、命令和策略的直观理解 - 项在执行时返回特定值，命令修改环境或打印某些内容，策略修改证明状态。
 
-We have hinted at the flow of execution of these three essential commands here and there, however let's lay it out explicitly. The order of execution follows the following pseudocodey template: `syntax (macro; syntax)* elab`.
+## 执行顺序：句法规则、宏、elab
 
-Consider the following example.
+上面是这三个基本命令的执行流程，现在明确地阐述一下。执行顺序遵循以下伪代码模板：`syntax (macro; syntax)* elab`。
 
+考虑以下示例。
 -/
 import Lean
 open Lean Elab Command
@@ -121,48 +121,43 @@ syntax (name := zzz) "blue" : command
 red -- finally, blue!
 
 /-
+流程如下：
 
-The process is as follows:
+- 匹配适当的 `syntax` 规则（恰好有 `name := xxx`）➤
+    应用 `@[macro xxx]` ➤
 
-- match appropriate `syntax` rule (happens to have `name := xxx`) ➤  
-    apply `@[macro xxx]` ➤
+- 匹配适当的 `syntax` 规则（恰好有 `name := yyy`）➤
+    应用 `@[macro yyy]` ➤
 
-- match appropriate `syntax` rule (happens to have `name := yyy`) ➤  
-    apply `@[macro yyy]` ➤
+- 匹配适当的 `syntax` 规则（恰好有 `name := zzz`）➤
+    找不到任何名称为 `zzz` 的宏来应用，
+    因此应用 `@[command_elab zzz]`。🎉。
 
-- match appropriate `syntax` rule (happens to have `name := zzz`) ➤  
-    can't find any macros with name `zzz` to apply,  
-    so apply `@[command_elab zzz]`.  🎉.
+可以从这些第一性原理中理解语法糖（`elab`、`macro` 等）的行为。
 
-The behaviour of syntax sugars (`elab`, `macro`, etc.) can be understood from these first principles.
+## `Syntax`/`Expr`/可执行代码之间的手动转换
 
-## Manual conversions between `Syntax`/`Expr`/executable-code
-
-Lean will execute the aforementioned **parsing**/**elaboration**/**evaluation** steps for you automatically if you use `syntax`, `macro` and `elab` commands, however, when you're writing your tactics, you will also frequently need to perform these transitions manually. You can use the following functions for that:
+如果您使用 `syntax`、`macro` 和 `elab` 命令，Lean 将自动为您执行上述 **解析**/**繁饰**/**求值** 步骤，但是，当您编写策略时，您也经常需要手动执行这些转换。您可以使用以下函数来实现：
 
 <p align="center">
 <img width="650px" src="https://github.com/arthurpaulino/lean4-metaprogramming-book/assets/7578559/b403e650-dab4-4843-be8c-8fb812695a3a"/>
 </p>
 
-Note how all functions that let us turn `Syntax` into `Expr` start with "elab", short for "elaboration"; and all functions that let us turn `Expr` (or `Syntax`) into `actual code` start with "eval", short for "evaluation".
+请注意，所有允许我们将 `Syntax` 转换为 `Expr` 的函数都以「elab」开头；所有允许我们将 `Expr`（或 `Syntax`）转换为 `actual code` 的函数都以「eval」（求值 evaluation 的简写）开头。
 
-## Assigning meaning: macro VS elaboration?
+## 赋予含义：宏 VS 繁饰？
 
-In principle, you can do with a `macro` (almost?) anything you can do with the `elab` function. Just write what you would have in the body of your `elab` as a syntax within `macro`. However, the rule of thumb here is to only use `macro`s when the conversion is simple and truly feels elementary to the point of aliasing. As Henrik Böving puts it: "as soon as types or control flow is involved a macro is probably not reasonable anymore" ([Zulip thread](https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/The.20line.20between.20term.20elaboration.20and.20macro/near/280951290)).  
+原则上，您可以使用 `macro` 执行（几乎？）任何可以使用 `elab` 函数执行的操作。只需将您在 `elab` 主体中的内容写成 `macro` 中的语法即可。但是，这里的经验法则是，仅当转换足够简单基本，几乎仅需重命名操作时才使用 `macro`。正如 Henrik Böving 所说：「一旦涉及类型或控制流，宏可能就不再合理了」（[出自Zulip](https://leanprover.zulipchat.com/#narrow/stream/270676-lean4/topic/The.20line.20between.20term.20elaboration.20and.20macro/near/280951290))。
 
-So - use `macro`s for creating syntax sugars, notations, and shortcuts, and prefer `elab`s for writing out code with some programming logic, even if it's potentially implementable in a `macro`.
+因此，使用 `macro` 来创建语法糖、符号和快捷方式，并优先使用 `elab` 来编写带有一些编程逻辑的代码，即使它可能可以在 `macro` 中实现。
 
-## Additional comments
+## 附加内容
 
-Finally - some notes that should clarify a few things as you read the coming chapters.
+### 打印消息
 
-### Printing Messages
+在 `#assertType` 示例中，我们使用 `logInfo` 来让我们的命令打印一些内容。如果我们只是想进行快速调试，我们可以使用 `dbg_trace`。
 
-In the `#assertType` example, we used `logInfo` to make our command print
-something. If, instead, we just want to perform a quick debug, we can use
-`dbg_trace`.
-
-They behave a bit differently though, as we can see below:
+但它们的行为略有不同，如下所示：
 -/
 
 elab "traces" : tactic => do
@@ -170,21 +165,14 @@ elab "traces" : tactic => do
   Lean.logInfo m!"logInfo: {array}"
   dbg_trace f!"dbg_trace: {array}"
 
-example : True := by -- `example` is underlined in blue, outputting:
-                     -- dbg_trace: [[0, 1, 2], [0, 1, 2]]
-  traces -- now `traces` is underlined in blue, outputting
-         -- logInfo: [[0, 1, 2], [0, 1, 2]]
+example : True := by -- `example` 的蓝色下划线输出：dbg_trace: [[0, 1, 2], [0, 1, 2]]
+
+  traces -- 现在 `traces` 的蓝色下划线输出：logInfo: [[0, 1, 2], [0, 1, 2]]
+
   trivial
 
 /-
-### Type correctness
+### 类型正确性
 
-Since the objects defined in the meta-level are not the ones we're most
-interested in proving theorems about, it can sometimes be overly tedious to
-prove that they are type correct. For example, we don't care about proving that
-a recursive function to traverse an expression is well-founded. Thus, we can
-use the `partial` keyword if we're convinced that our function terminates. In
-the worst-case scenario, our function gets stuck in a loop, causing the Lean server to crash
-in VSCode, but the soundness of the underlying type theory implemented in the kernel
-isn't affected.
+由于元层面中定义的对象不是我们最感兴趣的证明定理的对象，因此证明它们的类型正确有时可能过于繁琐。例如，我们不关心证明遍历表达式的递归函数是否合理。因此，如果我们确信函数终止，我们可以使用 `partial` 关键字。在最坏的情况下，我们的函数会陷入循环，导致 Lean 服务器在 VSCode 中崩溃，但内核中实现的底层类型论的合理性不受影响。
 -/
