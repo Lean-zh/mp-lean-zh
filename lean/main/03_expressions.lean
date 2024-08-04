@@ -179,7 +179,7 @@ set_option pp.explicit true in
 /-
 在下一章中，我们将探索 `MetaM` 单子，它具有更方便地构建和销毁更大的表达式和其它一些功能。
 
-## Exercises
+## 习题
 
 1. 创建表达式 `1 + 2` 通过 `Expr.app`
 2. 创建表达式 `1 + 2` 通过 `Lean.mkAppN`

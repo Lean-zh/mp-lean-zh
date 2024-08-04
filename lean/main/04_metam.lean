@@ -1,54 +1,41 @@
 /-
 # `MetaM`
 
-The Lean 4 metaprogramming API is organised around a small zoo of monads. The
-four main ones are:
+Lean 4 元编程 API 围绕着一系列单子（Monad）组织起来。主要有四个：
 
-- `CoreM` gives access to the *environment*, i.e. the set of things that
-  have been declared or imported at the current point in the program.
-- `MetaM` gives access to the *metavariable context*, i.e. the set of
-  metavariables that are currently declared and the values assigned to them (if
-  any).
-- `TermElabM` gives access to various information used during elaboration.
-- `TacticM` gives access to the list of current goals.
+- `CoreM` 允许访问 **环境**，即程序当前点已声明或导入的事物集。
+- `MetaM` 允许访问 **元变量语境**，即当前声明的元变量集及其赋值（如果有）。
+- `TermElabM` 允许访问在繁饰过程中使用的各种信息。
+- `TacticM` 允许访问当前目标列表。
 
-These monads extend each other, so a `MetaM` operation also has access to the
-environment and a `TermElabM` computation can use metavariables. There are also
-other monads which do not neatly fit into this hierarchy, e.g. `CommandElabM`
-extends `MetaM` but neither extends nor is extended by `TermElabM`.
+这些单子相互扩展，因此 `MetaM` 操作也可以访问环境，而 `TermElabM` 计算可以使用元变量。还有其他单子不能很好地适应这个层次结构，例如`CommandElabM` 扩展了 `MetaM`，但与 `TermElabM` 没有扩展或被扩展的关系。
 
-This chapter demonstrates a number of useful operations in the `MetaM` monad.
-`MetaM` is of particular importance because it allows us to give meaning to
-every expression: the environment (from `CoreM`) gives meaning to constants like
-`Nat.zero` or `List.map` and the metavariable context gives meaning to both
-metavariables and local hypotheses. -/
+本章演示了 `MetaM` 单子中的许多有用操作。`MetaM` 特别重要，因为它允许我们为每个表达式赋予意义：环境（来自 `CoreM`）为 `Nat.zero` 或 `List.map` 等常量赋予意义，而元变量的语境为元变量和局部假设赋予意义。
+-/
 
 import Lean
 
 open Lean Lean.Expr Lean.Meta
 
 /-!
-## Metavariables
+## 元变量
 
-### Overview
+### 概述
 
-The 'Meta' in `MetaM` refers to metavariables, so we should talk about these
-first. Lean users do not usually interact much with metavariables -- at least
-not consciously -- but they are used all over the place in metaprograms. There
-are two ways to view them: as holes in an expression or as goals.
+`MetaM` 中的「Meta」指的是元变量，所以我们应该先讨论一下。Lean 用户通常不会与元变量进行太多交互--至少不是主动为之--但它们在元程序中随处可见。有两种方式可以查看它们：作为表达式中的洞或作为目标。
 
-Take the goal perspective first. When we prove things in Lean, we always operate
-on goals, such as
+首先从目标角度来看。当我们在 Lean 中证明事物时，我们总是围绕目标进行操作，例如
 
 ```lean
 n m : Nat
 ⊢ n + m = m + n
 ```
 
-These goals are internally represented by metavariables. Accordingly, each
-metavariable has a *local context* containing hypotheses (here `[n : Nat, m :
-Nat]`) and a *target type* (here `n + m = m + n`). Metavariables also have a
-unique name, say `m`, and we usually render them as `?m`.
+这些目标在内部由元变量表示。因此，每个元变量都有一个包含假设的*局域语境*（此处为`[n : Nat, m : Nat]`）和一个*目标类型*（此处为`n + m = m + n`）。元变量还有一个唯一的名称，比如 `m`，我们通常将它们呈现为 `?m`。
+
+要证成目标，我们必须给出目标类型的表达式 `e`。该表达式可能包含来自元变量局域语境的 fvar，但不包含其他变量。在内部，以这种方式证成目标相当于*指派*元变量；我们为此指派写 `?m := e`。
+
+元变量的第二个互补观点是它们表示表达式中的洞。例如，应用 `Eq.trans` 可能会生成两个如下所示的目标：
 
 To close a goal, we must give an expression `e` of the target type. The
 expression may contain fvars from the metavariable's local context, but no
@@ -1207,32 +1194,32 @@ you've already seen several glimpses in this chapter. We start by discussing
 Lean's syntax system, which allows you to add custom syntactic constructs to the
 Lean parser.
 
-## Exercises
+## 习题
 
-1. [**Metavariables**] Create a metavariable with type `Nat`, and assign to it value `3`.
-Notice that changing the type of the metavariable from `Nat` to, for example, `String`, doesn't raise any errors - that's why, as was mentioned, we must make sure *"(a) that `val` must have the target type of `mvarId` and (b) that `val` must only contain `fvars` from the local context of `mvarId`"*.
-2. [**Metavariables**] What would `instantiateMVars (Lean.mkAppN (Expr.const 'Nat.add []) #[mkNatLit 1, mkNatLit 2])` output?
-3. [**Metavariables**] Fill in the missing lines in the following code.
+1. [**元变量**] 创建一个类型为 `Nat` 的元变量，并为其赋值 `3`。
+请注意，更改元变量的类型，例如从 `Nat` 更改为 `String` 不会引发任何错误 - 这就是为什么我们必须确保 *“(a) `val` 必须具有 `mvarId` 的目标类型，并且 (b) `val` 必须仅包含来自 `mvarId` 本地上下文的 `fvars`”*。
+2. [**元变量**] `instantiateMVars (Lean.mkAppN (Expr.const 'Nat.add []) #[mkNatLit 1, mkNatLit 2])` 会输出什么？
+3. [**元变量**] 填写以下代码中缺失的行。
 
     ```lean
     #eval show MetaM Unit from do
       let oneExpr := Expr.app (Expr.const `Nat.succ []) (Expr.const ``Nat.zero [])
       let twoExpr := Expr.app (Expr.const `Nat.succ []) oneExpr
 
-      -- Create `mvar1` with type `Nat`
+      -- 创建 `mvar1` 类型为 `Nat`
       -- let mvar1 ← ...
-      -- Create `mvar2` with type `Nat`
+      -- 创建 `mvar2` 类型为 `Nat`
       -- let mvar2 ← ...
-      -- Create `mvar3` with type `Nat`
+      -- 创建 `mvar3` 类型为 `Nat`
       -- let mvar3 ← ...
 
-      -- Assign `mvar1` to `2 + ?mvar2 + ?mvar3`
+      -- 指派 `mvar1` 为 `2 + ?mvar2 + ?mvar3`
       -- ...
 
-      -- Assign `mvar3` to `1`
+      -- 指派 `mvar3` 为 `1`
       -- ...
 
-      -- Instantiate `mvar1`, which should result in expression `2 + ?mvar2 + 1`
+      -- 实例化 `mvar1`，结果为表达式 `2 + ?mvar2 + 1`
       ...
     ```
 4. [**Metavariables**] Consider the theorem `red`, and tactic `explore` below.
