@@ -1,25 +1,19 @@
 /-
-# Tactics
-
-Tactics are Lean programs that manipulate a custom state. All tactics are, in
-the end, of type `TacticM Unit`. This has the type:
+# 证明策略
+证明策略(Tactic)是 Lean 程序，用于操纵自定义状态。最终，所有策略都属于 `TacticM Unit` 类型。其类型为：
 
 ```lean
--- from Lean/Elab/Tactic/Basic.lean
+-- 来自 Lean/Elab/Tactic/Basic.lean
 TacticM = ReaderT Context $ StateRefT State TermElabM
 ```
 
-But before demonstrating how to use `TacticM`, we shall explore macro-based
-tactics.
+但在演示如何使用 `TacticM` 之前，我们将探索基于宏的策略。
 
-## Tactics by Macro Expansion
+## 通过宏扩展的策略
 
-Just like many other parts of the Lean 4 infrastructure, tactics too can be
-declared by lightweight macro expansion.
+与 Lean 4 基础架构的许多其他部分一样，策略也可以通过轻量级宏扩展来声明。
 
-For example, we build an example of a `custom_sorry_macro` that elaborates into
-a `sorry`. We write this as a macro expansion, which expands the piece of syntax
-`custom_sorry_macro` into the piece of syntax `sorry`:
+例如下面的 `custom_sorry_macro` 示例，该示例繁饰为 `sorry`。我们将其写为宏扩展，将语法片段 `custom_sorry_macro` 扩展为语法片段 `sorry`：
 -/
 
 import Lean.Elab.Tactic

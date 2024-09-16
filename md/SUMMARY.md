@@ -1,32 +1,32 @@
-# Summary
+# 目录
 
-# Main
+# 正文
 
-- [Introduction](./main/01_intro.md)
-- [Overview](./main/02_overview.md)
-- [Expressions](./main/03_expressions.md)
+- [介绍](./main/01_intro.md)
+- [概述](./main/02_overview.md)
+- [表达式](./main/03_expressions.md)
 - [MetaM](./main/04_metam.md)
-- [Syntax](./main/05_syntax.md)
-- [Macros](./main/06_macros.md)
-- [Elaboration](./main/07_elaboration.md)
-- [Embedding DSLs By Elaboration](./main/08_dsls.md)
-- [Tactics](./main/09_tactics.md)
-- [Lean4 Cheat-sheet](./main/10_cheat-sheet.md)
+- [句法](./main/05_syntax.md)
+- [宏](./main/06_macros.md)
+- [繁饰](./main/07_elaboration.md)
+- [通过繁饰嵌入DSL](./main/08_dsls.md)
+- [证明策略](./main/09_tactics.md)
+- [Lean4速查表](./main/10_cheat-sheet.md)
 
-# Extra
+# 额外内容
 
-- [Options](./extra/01_options.md)
+- [选项](./extra/01_options.md)
 <!-- - [Attributes]() -->
-- [Pretty Printing](./extra/03_pretty-printing.md)
+- [美观打印](./extra/03_pretty-printing.md)
 
-# Solutions
+# 习题解答
 
 <!-- - [Introduction]() -->
 <!-- - [Overview]() -->
-- [Expressions](./solutions/03_expressions.md)
+- [表达式](./solutions/03_expressions.md)
 - [`MetaM`](./solutions/04_metam.md)
-- [`Syntax`](./solutions/05_syntax.md)
+- [句法](./solutions/05_syntax.md)
 <!-- - [Macros]() -->
-- [Elaboration](./solutions/07_elaboration.md)
+- [繁饰](./solutions/07_elaboration.md)
 <!-- - [DSLs]() -->
-- [Tactics](./solutions/09_tactics.md)
+- [证明策略](./solutions/09_tactics.md)
