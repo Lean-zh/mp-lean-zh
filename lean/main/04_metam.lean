@@ -22,7 +22,7 @@ open Lean Lean.Expr Lean.Meta
 
 ### 概述
 
-`MetaM` 中的「Meta」指的是元变量，所以我们应该先讨论一下。Lean 用户通常不会与元变量进行太多交互--至少不是主动为之--但它们在元程序中随处可见。有两种方式可以查看它们：作为表达式中的洞或作为目标。
+`MetaM` 中的「Meta」指的是元变量，所以我们应该先讨论一下。Lean 用户通常不会与元变量进行太多交互--至少不是主动为之--但它们在元程序中随处可见。有两种方式看待它们：作为表达式中的洞或作为目标。
 
 首先从目标角度来看。当我们在 Lean 中证明事物时，我们总是围绕目标进行操作，例如
 
@@ -31,20 +31,11 @@ n m : Nat
 ⊢ n + m = m + n
 ```
 
-这些目标在内部由元变量表示。因此，每个元变量都有一个包含假设的*局域语境*（此处为`[n : Nat, m : Nat]`）和一个*目标类型*（此处为`n + m = m + n`）。元变量还有一个唯一的名称，比如 `m`，我们通常将它们呈现为 `?m`。
+这些目标在内部由元变量表示。因此，每个元变量都有一个包含假设的**局部语境**（此处为`[n : Nat, m : Nat]`）和一个**目标类型**（此处为`n + m = m + n`）。元变量还有一个唯一的名称，比如 `m`，我们通常将它们呈现为 `?m`。
 
-要证成目标，我们必须给出目标类型的表达式 `e`。该表达式可能包含来自元变量局域语境的 fvar，但不包含其他变量。在内部，以这种方式证成目标相当于*指派*元变量；我们为此指派写 `?m := e`。
+要证成目标，我们必须给出目标类型的表达式 `e`。该表达式可能包含来自元变量局部语境的自由变量fvar，但不包含其他变量。在内部，以这种方式证成目标相当于**指派**元变量，写作 `?m := e`。
 
 元变量的第二个互补观点是它们表示表达式中的洞。例如，应用 `Eq.trans` 可能会生成两个如下所示的目标：
-
-To close a goal, we must give an expression `e` of the target type. The
-expression may contain fvars from the metavariable's local context, but no
-others. Internally, closing a goal in this way corresponds to *assigning* the
-metavariable; we write `?m := e` for this assignment.
-
-The second, complementary view of metavariables is that they represent holes
-in an expression. For instance, an application of `Eq.trans` may generate two
-goals which look like this:
 
 ```lean
 n m : Nat
@@ -54,18 +45,11 @@ n m : Nat
 ⊢ ?x = m
 ```
 
-Here `?x` is another metavariable -- a hole in the target types of both goals,
-to be filled in later during the proof. The type of `?x` is `Nat` and its local
-context is `[n : Nat, m : Nat]`. Now, if we solve the first goal by reflexivity,
-then `?x` must be `n`, so we assign `?x := n`. Crucially, this also affects the
-second goal: it is "updated" (not really, as we will see) to have target `n =
-m`. The metavariable `?x` represents the same expression everywhere it occurs.
+这里的 `?x` 是另一个元变量 -- 是两个目标类型中的一个空洞，在证明过程中会被填充。`?x` 的类型是 `Nat`，它的局部语境是 `[n : Nat, m : Nat]`。现在，如果我们通过 `rfl` 解决第一个目标，那么 `?x` 必须是 `n`，因此我们会赋值 `?x := n`。关键是，这同样会影响第二个目标：它的目标将被“更新”为 `n = m`（实际上并不是完全更新，后续会说明）。元变量 `?x` 在它出现的所有地方都代表相同的表达式。
 
+### 通过元变量进行策略通信
 
-### Tactic Communication via Metavariables
-
-Tactics use metavariables to communicate the current goals. To see how, consider
-this simple (and slightly artificial) proof:
+策略通过元变量来传递当前的目标。为了理解这一点，我们来看一个简单（但稍显刻意）的证明例子：
 -/
 
 example {α} (a : α) (f : α → α) (h : ∀ a, f a = a) : f (f a) = a := by
@@ -74,14 +58,9 @@ example {α} (a : α) (f : α → α) (h : ∀ a, f a = a) : f (f a) = a := by
   apply h
 
 /-!
-After we enter tactic mode, our ultimate goal is to generate an expression of
-type `f (f a) = a` which may involve the hypotheses `α`, `a`, `f` and `h`. So
-Lean generates a metavariable `?m1` with target `f (f a) = a` and a local
-context containing these hypotheses. This metavariable is passed to the first
-`apply` tactic as the current goal.
+进入策略模式后，我们的最终目标是生成一个类型为 `f (f a) = a` 的表达式，这个表达式可能会涉及假设 `α`、`a`、`f` 和 `h`。因此，Lean 生成了一个目标类型为 `f (f a) = a` 的元变量 `?m1`，它的局部语境包含了这些假设。这个元变量被传递给第一个 `apply` 策略作为当前目标。
 
-The `apply` tactic then tries to apply `Eq.trans` and succeeds, generating three
-new metavariables:
+`apply` 策略尝试应用 `Eq.trans` 并成功，生成了三个新的元变量：
 
 ```lean
 ...
@@ -94,30 +73,21 @@ new metavariables:
 ⊢ α
 ```
 
-Call these metavariables `?m2`, `?m3` and `?b`. The last one, `?b`, stands for
-the intermediate element of the transitivity proof and occurs in `?m2` and
-`?m3`. The local contexts of all metavariables in this proof are the same, so
-we omit them.
+我们称这些元变量为 `?m2`、`?m3` 和 `?b`。其中最后一个 `?b` 代表了传递性证明中的中间元素，并出现在 `?m2` 和 `?m3` 中。所有这些元变量的局部语境是相同的，因此我们省略它们。
 
-Having created these metavariables, `apply` assigns
+创建了这些元变量后，`apply` 将进行以下赋值：
 
 ```lean
 ?m1 := @Eq.trans α (f (f a)) ?b a ?m2 ?m3
 ```
 
-and reports that `?m2`, `?m3` and `?b` are now the current goals.
+并报告说 `?m2`、`?m3` 和 `?b` 现在是当前的目标。
 
-At this point the second `apply` tactic takes over. It receives `?m2` as the
-current goal and applies `h` to it. This succeeds and the tactic assigns `?m2 :=
-h (f a)`. This assignment implies that `?b` must be `f a`, so the tactic also
-assigns `?b := f a`. Assigned metavariables are not considered open goals, so
-the only goal that remains is `?m3`.
+此时，第二个 `apply` 策略接手。它接收 `?m2` 作为当前目标，并将 `h` 应用于它。这成功了，并且策略赋值 `?m2 := h (f a)`。这个赋值意味着 `?b` 必须是 `f a`，因此策略也对 `?b := f a` 进行赋值。被赋值的元变量不再被视为开放目标，所以剩下的唯一目标是 `?m3`。
 
-Now the third `apply` comes in. Since `?b` has been assigned, the target of
-`?m3` is now `f a = a`. Again, the application of `h` succeeds and the
-tactic assigns `?m3 := h a`.
+接着第三个 `apply` 策略开始执行。由于 `?b` 已经被赋值，`?m3` 的目标现在变成了 `f a = a`。再次应用 `h` 成功，策略将 `?m3 := h a` 进行赋值。
 
-At this point, all metavariables are assigned as follows:
+此时，所有元变量的赋值如下：
 
 ```lean
 ?m1 := @Eq.trans α (f (f a)) ?b a ?m2 ?m3
@@ -126,202 +96,136 @@ At this point, all metavariables are assigned as follows:
 ?b  := f a
 ```
 
-Exiting the `by` block, Lean constructs the final proof term by taking the
-assignment of `?m1` and replacing each metavariable with its assignment. This
-yields
+退出 `by` 块后，Lean 通过获取 `?m1` 的赋值并将每个元变量替换为它的赋值来构建最终的证明项。这最终得出以下结果：
 
 ```lean
 @Eq.trans α (f (f a)) (f a) a (h (f a)) (h a)
 ```
 
-The example also shows how the two views of metavariables -- as holes in an
-expression or as goals -- are related: the goals we get are holes in the final
-proof term.
+这个例子还显示了元变量的两种视角 -- 作为表达式中的洞或作为目标 -- 是如何关联的：中间目标是最终证明项中的洞。
 
+### 基本操作
 
-### Basic Operations
-
-Let us make these concepts concrete. When we operate in the `MetaM` monad, we
-have read-write access to a `MetavarContext` structure containing information
-about the currently declared metavariables. Each metavariable is identified by
-an `MVarId` (a unique `Name`). To create a new metavariable, we use
-`Lean.Meta.mkFreshExprMVar` with type
+让我们具体化这些概念。当我们在 `MetaM` 单子中操作时，我们可以读写访问包含当前声明的元变量信息的 `MetavarContext` 结构。每个元变量由一个 `MVarId`（一个唯一的 `Name`）标识。要创建一个新的元变量，我们使用 `Lean.Meta.mkFreshExprMVar`，其类型如下：
 
 ```lean
 mkFreshExprMVar (type? : Option Expr) (kind := MetavarKind.natural)
     (userName := Name.anonymous) : MetaM Expr
 ```
 
-Its arguments are:
+其参数为：
 
-- `type?`: the target type of the new metavariable. If `none`, the target type
-  is `Sort ?u`, where `?u` is a universe level metavariable. (This is a special
-  class of metavariables for universe levels, distinct from the expression
-  metavariables which we have been calling simply "metavariables".)
-- `kind`: the metavariable kind. See the [Metavariable Kinds
-  section](#metavariable-kinds) (but the default is usually correct).
-- `userName`: the new metavariable's user-facing name. This is what gets printed
-  when the metavariable appears in a goal. Unlike the `MVarId`, this name does
-  not need to be unique.
+- `type?`：新元变量的目标类型。如果为 `none`，目标类型为 `Sort ?u`，其中 `?u` 是一个宇宙层级元变量（这是一个特殊的元变量类别，用于宇宙层级，与我们一直称为「元变量」的表达式元变量不同）。
+- `kind`：元变量的种类。参见[元变量种类](#metavariable-kinds)（通常默认值是正确的）。
+- `userName`：新元变量的用户可见名称。这是当元变量出现在目标中时会显示的名称。与 `MVarId` 不同，这个名称不需要唯一。
 
-The returned `Expr` is always a metavariable. We can use `Lean.Expr.mvarId!` to
-extract the `MVarId`, which is guaranteed to be unique. (Arguably
-`mkFreshExprMVar` should just return the `MVarId`.)
+返回的 `Expr` 始终是一个元变量。我们可以使用 `Lean.Expr.mvarId!` 来提取唯一的 `MVarId`。（可以说，`mkFreshExprMVar` 应该只返回 `MVarId`。）
 
-The local context of the new metavariable is inherited from the current local
-context, more about which in the next section. If you want to give a different
-local context, use `Lean.Meta.mkFreshExprMVarAt`.
+新元变量的局部语境继承自当前的局部语境，更多细节将在下一节介绍。如果你想要提供不同的局部语境，可以使用 `Lean.Meta.mkFreshExprMVarAt`。
 
-Metavariables are initially unassigned. To assign them, use
-`Lean.MVarId.assign` with type
+元变量最初是未赋值的。要为它们赋值，可以使用 `Lean.MVarId.assign`，其类型如下：
 
 ```lean
 assign (mvarId : MVarId) (val : Expr) : MetaM Unit
 ```
 
-This updates the `MetavarContext` with the assignment `?mvarId := val`. You must
-make sure that `mvarId` is not assigned yet (or that the old assignment is
-definitionally equal to the new assignment). You must also make sure that the
-assigned value, `val`, has the right type. This means (a) that `val` must have
-the target type of `mvarId` and (b) that `val` must only contain fvars from the
-local context of `mvarId`.
+这会使用赋值 `?mvarId := val` 来更新 `MetavarContext`。你必须确保 `mvarId` 尚未被赋值（或者旧的赋值与新的赋值是定义相等的）。你还必须确保赋值的值 `val` 具有正确的类型。这意味着 (a) `val` 必须具有 `mvarId` 的目标类型，并且 (b) `val` 必须只包含 `mvarId` 局部语境中的自由变量。
 
-If you `#check Lean.MVarId.assign`, you will see that its real type is more
-general than the one we showed above: it works in any monad that has access to a
-`MetavarContext`. But `MetaM` is by far the most important such monad, so in
-this chapter, we specialise the types of `assign` and similar functions.
+如果你 `#check Lean.MVarId.assign`，你会看到它的实际类型比我们上面显示的更通用：它适用于任何可以访问 `MetavarContext` 的单子。但 `MetaM` 是其中最重要的单子，所以在本章中，我们专门讨论 `assign` 和类似函数的类型。
 
-To get information about a declared metavariable, use `Lean.MVarId.getDecl`.
-Given an `MVarId`, this returns a `MetavarDecl` structure. (If no metavariable
-with the given `MVarId` is declared, the function throws an exception.) The
-`MetavarDecl` contains information about the metavariable, e.g. its type, local
-context and user-facing name. This function has some convenient variants, such
-as `Lean.MVarId.getType`.
+要获取关于已声明的元变量的信息，使用 `Lean.MVarId.getDecl`。给定一个 `MVarId`，这会返回一个 `MetavarDecl` 结构。（如果没有声明给定 `MVarId` 的元变量，函数会抛出异常。）`MetavarDecl` 包含关于元变量的信息，例如其类型、局部语境和用户界面名称。这个函数有一些方便的变体，如 `Lean.MVarId.getType`。
 
-To get the current assignment of a metavariable (if any), use
-`Lean.getExprMVarAssignment?`. To check whether a metavariable is assigned, use
-`Lean.MVarId.isAssigned`. However, these functions are relatively rarely
-used in tactic code because we usually prefer a more powerful operation:
-`Lean.Meta.instantiateMVars` with type
+要获取元变量的当前赋值（如果有），使用 `Lean.getExprMVarAssignment?`。要检查元变量是否已被赋值，使用 `Lean.MVarId.isAssigned`。然而，这些函数在策略代码中相对少用，因为我们通常更喜欢更强大的操作：`Lean.Meta.instantiateMVars` 类型为
 
 ```lean
 instantiateMVars : Expr → MetaM Expr
 ```
 
-Given an expression `e`, `instantiateMVars` replaces any assigned metavariable
-`?m` in `e` with its assigned value. Unassigned metavariables remain as they
-are.
+给定一个表达式 `e`，`instantiateMVars` 用已赋值的值替换 `e` 中的任何已赋值元变量 `?m`。未赋值的元变量保持原样。
 
-This operation should be used liberally. When we assign a metavariable, existing
-expressions containing this metavariable are not immediately updated. This is a
-problem when, for example, we match on an expression to check whether it is an
-equation. Without `instantiateMVars`, we might miss the fact that the expression
-`?m`, where `?m` happens to be assigned to `0 = n`, represents an equation. In
-other words, `instantiateMVars` brings our expressions up to date with the
-current metavariable state.
+这个操作应该被广泛使用。当我们赋值一个元变量时，包含该元变量的现有表达式不会立即更新。这在例如我们匹配一个表达式以检查它是否是一个等式时会成为一个问题。如果没有 `instantiateMVars`，我们可能会错过表达式 `?m`，其中 `?m` 恰好被赋值为 `0 = n`，代表一个等式。换句话说，`instantiateMVars` 使我们的表达式与当前的元变量状态保持同步。
 
-Instantiating metavariables requires a full traversal of the input expression,
-so it can be somewhat expensive. But if the input expression does not contain
-any metavariables, `instantiateMVars` is essentially free. Since this is the
-common case, liberal use of `instantiateMVars` is fine in most situations.
+实例化元变量需要完整遍历输入表达式，所以它可能会有些昂贵。但如果输入表达式不包含任何元变量，`instantiateMVars` 基本上是免费的。由于这是常见情况，在大多数情况下广泛使用 `instantiateMVars` 是可以的。
 
-Before we go on, here is a synthetic example demonstrating how the basic
-metavariable operations are used. More natural examples appear in the following
-sections.
+在我们继续之前，这里有一个合成示例，展示了基本的元变量操作的使用。更自然的示例出现在接下来的部分中。
 -/
 
 #eval show MetaM Unit from do
-  -- Create two fresh metavariables of type `Nat`.
+  -- 创建两个新元变量，类型为 `Nat`
   let mvar1 ← mkFreshExprMVar (Expr.const ``Nat []) (userName := `mvar1)
   let mvar2 ← mkFreshExprMVar (Expr.const ``Nat []) (userName := `mvar2)
-  -- Create a fresh metavariable of type `Nat → Nat`. The `mkArrow` function
-  -- creates a function type.
+  -- 创建一个新元变量，类型为 `Nat → Nat`。`mkArrow` 函数创建了函数类型。
   let mvar3 ← mkFreshExprMVar (← mkArrow (.const ``Nat []) (.const ``Nat []))
     (userName := `mvar3)
 
-  -- Define a helper function that prints each metavariable.
+  -- 定义一个辅助函数来打印这些元变量。
   let printMVars : MetaM Unit := do
     IO.println s!"  meta1: {← instantiateMVars mvar1}"
     IO.println s!"  meta2: {← instantiateMVars mvar2}"
     IO.println s!"  meta3: {← instantiateMVars mvar3}"
 
-  IO.println "Initially, all metavariables are unassigned:"
+  IO.println "最初，所有的元变量都没被赋值："
   printMVars
 
-  -- Assign `mvar1 : Nat := ?mvar3 ?mvar2`.
+  -- 赋值 `mvar1 : Nat := ?mvar3 ?mvar2`.
   mvar1.mvarId!.assign (.app mvar3 mvar2)
-  IO.println "After assigning mvar1:"
+  IO.println "赋值mvar1之后："
   printMVars
 
-  -- Assign `mvar2 : Nat := 0`.
+  -- 赋值 `mvar2 : Nat := 0`.
   mvar2.mvarId!.assign (.const ``Nat.zero [])
-  IO.println "After assigning mvar2:"
+  IO.println "赋值mvar2之后："
   printMVars
 
-  -- Assign `mvar3 : Nat → Nat := Nat.succ`.
+  -- 赋值 `mvar3 : Nat → Nat := Nat.succ`.
   mvar3.mvarId!.assign (.const ``Nat.succ [])
-  IO.println "After assigning mvar3:"
+  IO.println "赋值mvar3之后："
   printMVars
--- Initially, all metavariables are unassigned:
+-- 最初，所有的元变量都没被赋值：
 --   meta1: ?_uniq.1
 --   meta2: ?_uniq.2
 --   meta3: ?_uniq.3
--- After assigning mvar1:
+-- 赋值mvar1之后：
 --   meta1: ?_uniq.3 ?_uniq.2
 --   meta2: ?_uniq.2
 --   meta3: ?_uniq.3
--- After assigning mvar2:
+-- 赋值mvar2之后：
 --   meta1: ?_uniq.3 Nat.zero
 --   meta2: Nat.zero
 --   meta3: ?_uniq.3
--- After assigning mvar3:
+-- 赋值mvar3之后：
 --   meta1: Nat.succ Nat.zero
 --   meta2: Nat.zero
 --   meta3: Nat.succ
 
-
 /-!
-### Local Contexts
+### 局部语境
 
-Consider the expression `e` which refers to the free variable with unique name
-`h`:
+考虑表达式 `e`，它引用了唯一名称为 `h` 的自由变量：
 
 ```lean
 e := .fvar (FVarId.mk `h)
 ```
 
-What is the type of this expression? The answer depends on the local context in
-which `e` is interpreted. One local context may declare that `h` is a local
-hypothesis of type `Nat`; another local context may declare that `h` is a local
-definition with value `List.map`.
+这个表达式的类型是什么？答案取决于解释 `e` 的局部语境。一个局部语境可能声明 `h` 是类型为 `Nat` 的局部假设；另一个局部语境可能声明 `h` 是值为 `List.map` 的局部定义。
 
-Thus, expressions are only meaningful if they are interpreted in the local
-context for which they were intended. And as we saw, each metavariable has its
-own local context. So in principle, functions which manipulate expressions
-should have an additional `MVarId` argument specifying the goal in which the
-expression should be interpreted.
+因此，表达式只有在为其设计的局部语境中解释时才有意义。如我们所见，每个元变量都有其自己的局部语境。因此，原则上，操作表达式的函数应该有一个附加的 `MVarId` 参数，指定解释表达式的目标。
 
-That would be cumbersome, so Lean goes a slightly different route. In `MetaM`,
-we always have access to an ambient `LocalContext`, obtained with `Lean.getLCtx`
-of type
+这会很麻烦，所以 Lean 采用了稍微不同的方式。在 `MetaM` 中，我们始终可以访问一个环境局部语境，可以通过 `Lean.getLCtx` 函数获得，类型为：
 
 ```lean
 getLCtx : MetaM LocalContext
 ```
 
-All operations involving fvars use this ambient local context.
+所有涉及自由变量的操作都使用这个环境局部语境。
 
-The downside of this setup is that we always need to update the ambient local
-context to match the goal we are currently working on. To do this, we use
-`Lean.MVarId.withContext` of type
+这种设置的缺点是我们始终需要更新环境局部语境以匹配当前处理的目标。为此，我们使用 `Lean.MVarId.withContext`，类型为
 
 ```lean
 withContext (mvarId : MVarId) (c : MetaM α) : MetaM α
 ```
 
-This function takes a metavariable `mvarId` and a `MetaM` computation `c` and
-executes `c` with the ambient context set to the local context of `mvarId`. A
-typical use case looks like this:
+这个函数接受一个元变量 `mvarId` 和一个 `MetaM` 计算过程 `c`，功能是，设置环境语境为 `mvarId` 的局部语境，而后执行 `c`。典型的用例如下：
 
 ```lean
 def someTactic (mvarId : MVarId) ... : ... :=
@@ -329,25 +233,14 @@ def someTactic (mvarId : MVarId) ... : ... :=
     ...
 ```
 
-The tactic receives the current goal as the metavariable `mvarId` and
-immediately sets the current local context. Any operations within the `do` block
-then use the local context of `mvarId`.
+策略接收当前目标作为元变量 `mvarId`，并立即设置当前局部语境。`do` 块内的任何操作都会使用 `mvarId` 的局部语境。
 
-Once we have the local context properly set, we can manipulate fvars. Like
-metavariables, fvars are identified by an `FVarId` (a unique `Name`). Basic
-operations include:
+一旦我们正确设置了局部语境，我们就可以操作自由变量。与元变量类似，自由变量由 `FVarId`（一个唯一的 `Name`）标识。基本操作包括：
 
-- `Lean.FVarId.getDecl : FVarId → MetaM LocalDecl` retrieves the declaration
-  of a local hypothesis. As with metavariables, a `LocalDecl` contains all
-  information pertaining to the local hypothesis, e.g. its type and its
-  user-facing name.
-- `Lean.Meta.getLocalDeclFromUserName : Name → MetaM LocalDecl` retrieves the
-  declaration of the local hypothesis with the given user-facing name. If there
-  are multiple such hypotheses, the bottommost one is returned. If there is
-  none, an exception is thrown.
+- `Lean.FVarId.getDecl : FVarId → MetaM LocalDecl` 获取局部假设的声明。与元变量一样，`LocalDecl` 包含所有关于局部假设的信息，例如其类型和用户界面名称。
+- `Lean.Meta.getLocalDeclFromUserName : Name → MetaM LocalDecl` 获取给定用户界面名称的局部假设的声明。如果有多个这样的假设，返回最底部的那个。如果没有，抛出异常。
 
-We can also iterate over all hypotheses in the local context, using the `ForIn`
-instance of `LocalContext`. A typical pattern is this:
+我们还可以使用 `LocalContext` 的 `ForIn` 实例在局部语境中的所有假设中迭代。典型模式如下：
 
 ```lean
 for ldecl in ← getLCtx do
@@ -356,71 +249,61 @@ for ldecl in ← getLCtx do
   -- do something with the ldecl
 ```
 
-The loop iterates over every `LocalDecl` in the context. The
-`isImplementationDetail` check skips local hypotheses which are 'implementation
-details', meaning they are introduced by Lean or by tactics for bookkeeping
-purposes. They are not shown to users and tactics are expected to ignore them.
+循环在语境中的每个 `LocalDecl` 中迭代。`isImplementationDetail` 检查会跳过作为「实现细节」的局部假设，意味着它们是由 Lean 或策略为了记账引入的。它们不会显示给用户，策略应忽略它们。
 
-At this point, we can build the `MetaM` part of an `assumption` tactic:
+此时，我们可以构建 `assumption` 策略的 `MetaM` 部分：
 -/
 
 def myAssumption (mvarId : MVarId) : MetaM Bool := do
-  -- Check that `mvarId` is not already assigned.
+  -- 检查 `mvarId` 是否尚未被赋值。
   mvarId.checkNotAssigned `myAssumption
-  -- Use the local context of `mvarId`.
+  -- 使用 `mvarId` 的局部语境。
   mvarId.withContext do
-    -- The target is the type of `mvarId`.
+    -- 目标 target 是 `mvarId` 的类型。
     let target ← mvarId.getType
-    -- For each hypothesis in the local context:
+    -- 对局部语境中的每个假设：
     for ldecl in ← getLCtx do
-      -- If the hypothesis is an implementation detail, skip it.
+      -- 如果假设是「实现细节」，那么跳过。
       if ldecl.isImplementationDetail then
         continue
-      -- If the type of the hypothesis is definitionally equal to the target
-      -- type:
+      -- 如果假设的类型定义等价于目标类型，那么：
       if ← isDefEq ldecl.type target then
-        -- Use the local hypothesis to prove the goal.
+        -- 使用局部假设来证明目标。
         mvarId.assign ldecl.toExpr
-        -- Stop and return true.
+        -- 停止并返回 true。
         return true
-    -- If we have not found any suitable local hypothesis, return false.
+    -- 如果没找到任何合适的假设，返回false。
     return false
 
 /-
-The `myAssumption` tactic contains three functions we have not seen before:
+`myAssumption` 策略中使用了三个我们之前没有见过的函数：
 
-- `Lean.MVarId.checkNotAssigned` checks that a metavariable is not already
-  assigned. The 'myAssumption' argument is the name of the current tactic. It is
-  used to generate a nicer error message.
-- `Lean.Meta.isDefEq` checks whether two definitions are definitionally equal.
-  See the [Definitional Equality section](#definitional-equality).
-- `Lean.LocalDecl.toExpr` is a helper function which constructs the `fvar`
-  expression corresponding to a local hypothesis.
+- `Lean.MVarId.checkNotAssigned`：检查一个元变量是否尚未被赋值。`myAssumption` 参数是当前策略的名称，用于生成更友好的错误消息。
+- `Lean.Meta.isDefEq`：检查两个定义是否在定义上相等。详细信息请参见[定义等价](#定义等价)部分。
+- `Lean.LocalDecl.toExpr`：是一个辅助函数，用于构建对应于局部假设的 `fvar` 表达式。
 
+### 延迟赋值
 
-### Delayed Assignments
+上述关于元变量赋值的讨论有一个遗漏：实际上有两种方式可以为元变量赋值。我们已经看到了一般的赋值方式，另一种称为**延迟赋值**（Delayed Assignments）。
 
-The above discussion of metavariable assignment contains a lie by omission:
-there are actually two ways to assign a metavariable. We have seen the regular
-way; the other way is called a *delayed assignment*.
+这里我们不会详细讨论延迟赋值，因为它们对于编写策略并不常用。如果你想了解更多信息，可以参阅 Lean 标准库中的 `MetavarContext.lean` 文件中的注释。不过，它们带来了两个需要注意的复杂问题。
 
-We do not discuss delayed assignments in any detail here since they are rarely
-useful for tactic writing. If you want to learn more about them, see the
-comments in `MetavarContext.lean` in the Lean standard library. But they create
-two complications which you should be aware of.
+首先，延迟赋值使得 `Lean.MVarId.isAssigned` 和 `getExprMVarAssignment?` 成为可能导致问题的函数。这些函数只检查常规的赋值，因此你可能还需要使用 `Lean.MVarId.isDelayedAssigned` 和 `Lean.Meta.getDelayedMVarAssignment?`。
 
-First, delayed assignments make `Lean.MVarId.isAssigned` and
-`getExprMVarAssignment?` medium-calibre footguns. These functions only check for
-regular assignments, so you may need to use `Lean.MVarId.isDelayedAssigned`
-and `Lean.Meta.getDelayedMVarAssignment?` as well.
+其次，延迟赋值打破了一种直观的约束。你可能假设在 `instantiateMVars` 的输出中仍然存在的元变量都是未赋值的，因为已赋值的元变量应该已经被替换掉了。但延迟赋值的元变量只有在其赋值的值不包含未赋值的元变量时才能被替换。因此，即使在 `instantiateMVars` 之后，延迟赋值的元变量仍然可能出现在表达式中。
 
-Second, delayed assignments break an intuitive invariant. You may have assumed
-that any metavariable which remains in the output of `instantiateMVars` is
-unassigned, since the assigned metavariables have been substituted. But delayed
-metavariables can only be substituted once their assigned value contains no
-unassigned metavariables. So delayed-assigned metavariables can appear in an
-expression even after `instantiateMVars`.
+### 元变量深度
 
+元变量深度也是一个较为小众的特性，但有时会派上用场。每个元变量都有一个*深度*（一个自然数），并且 `MetavarContext` 也有一个相应的深度。Lean 只有在元变量的深度等于当前 `MetavarContext` 的深度时才会为其赋值。新创建的元变量继承 `MetavarContext` 的深度，因此默认情况下，每个元变量都是可赋值的。
+
+这种机制在某些策略需要一些临时元变量，并且需要确保其他非临时元变量不会被赋值时会很有用。为了实现这一点，策略可以按照以下步骤进行：
+
+1. 保存当前的 `MetavarContext`。
+2. 增加 `MetavarContext` 的深度。
+3. 执行必要的计算，可能会创建和赋值元变量。新创建的元变量位于当前 `MetavarContext` 的深度，因此可以被赋值。而旧的元变量位于较低的深度，因此不能被赋值。
+4. 恢复保存的 `MetavarContext`，从而清除所有临时元变量并重置 `MetavarContext` 的深度。
+
+这种模式封装在 `Lean.Meta.withNewMCtxDepth` 中。
 
 ### Metavariable Depth
 
@@ -748,7 +631,7 @@ someone builds this automation, we have to figure out the necessary `whnf`s
 ourselves.
 
 
-### Definitional Equality
+### 定义等价
 
 As mentioned, definitional equality is equality up to computation. Two
 expressions `t` and `s` are definitionally equal or *defeq* (at the current
@@ -1197,7 +1080,7 @@ Lean parser.
 ## 习题
 
 1. [**元变量**] 创建一个类型为 `Nat` 的元变量，并为其赋值 `3`。
-请注意，更改元变量的类型，例如从 `Nat` 更改为 `String` 不会引发任何错误 - 这就是为什么我们必须确保 *“(a) `val` 必须具有 `mvarId` 的目标类型，并且 (b) `val` 必须仅包含来自 `mvarId` 本地上下文的 `fvars`”*。
+请注意，更改元变量的类型，例如从 `Nat` 更改为 `String` 不会引发任何错误 - 这就是为什么我们必须确保 **「(a) `val` 必须具有 `mvarId` 的目标类型，并且 (b) `val` 必须仅包含来自 `mvarId` 局部语境的 `fvars`」**。
 2. [**元变量**] `instantiateMVars (Lean.mkAppN (Expr.const 'Nat.add []) #[mkNatLit 1, mkNatLit 2])` 会输出什么？
 3. [**元变量**] 填写以下代码中缺失的行。
 
@@ -1222,10 +1105,10 @@ Lean parser.
       -- 实例化 `mvar1`，结果为表达式 `2 + ?mvar2 + 1`
       ...
     ```
-4. [**Metavariables**] Consider the theorem `red`, and tactic `explore` below.
-  **a)** What would be the `type` and `userName` of metavariable `mvarId`?
-  **b)** What would be the `type`s and `userName`s of all local declarations in this metavariable's local context?
-  Print them all out.
+4. [**元变量**] 考虑下面的定理 `red`和策略 `explore`。
+  **a)** 元变量 `mvarId` 的 `type` 和 `userName` 是什么？
+  **b)** 这个元变量的局部语境中所有的局部声明的 `type` 和 `userName` 是什么？
+  打印所有这些东西。
 
     ```lean
     elab "explore" : tactic => do
@@ -1242,20 +1125,20 @@ Lean parser.
       explore
       sorry
     ```
-5. [**Metavariables**] Write a tactic `solve` that proves the theorem `red`.
-6. [**Computation**] What is the normal form of the following expressions:
-  **a)** `fun x => x` of type `Bool → Bool`
-  **b)** `(fun x => x) ((true && false) || true)` of type `Bool`
-  **c)** `800 + 2` of type `Nat`
-7. [**Computation**] Show that `1` created with `Expr.lit (Lean.Literal.natVal 1)` is definitionally equal to an expression created with `Expr.app (Expr.const ``Nat.succ []) (Expr.const ``Nat.zero [])`.
-8. [**Computation**] Determine whether the following expressions are definitionally equal. If `Lean.Meta.isDefEq` succeeds, and it leads to metavariable assignment, write down the assignments.
+5. [**元变量**] 写一个策略 `solve` 来证明定理 `red`。
+6. [**计算**] 写出下面表达式的一般形式：
+  **a)** `fun x => x` 类型为 `Bool → Bool`
+  **b)** `(fun x => x) ((true && false) || true)` 类型为 `Bool`
+  **c)** `800 + 2` 类型为 `Nat`
+7. [**计算**] 说明 `Expr.lit (Lean.Literal.natVal 1)` 和 `Expr.app (Expr.const ``Nat.succ []) (Expr.const ``Nat.zero [])` 创建的 `1` 是定义等价的。
+8. [**计算**] 确定下面的表达式是否是定义等价的。如果 `Lean.Meta.isDefEq` 成功了，且它给元变量赋值，写出赋值。
   **a)** `5 =?= (fun x => 5) ((fun y : Nat → Nat => y) (fun z : Nat => z))`
   **b)** `2 + 1 =?= 1 + 2`
-  **c)** `?a =?= 2`, where `?a` has a type `String`
-  **d)** `?a + Int =?= "hi" + ?b`, where `?a` and `?b` don't have a type
+  **c)** `?a =?= 2`，其中 `?a` 具有类型 `String`
+  **d)** `?a + Int =?= "hi" + ?b`，其中 `?a` 和 `?b` 没有类型。
   **e)** `2 + ?a =?= 3`
   **f)** `2 + ?a =?= 2 + 1`
-9. [**Computation**] Write down what you expect the following code to output.
+9. [**计算**] 你预计下面的代码会有怎么样的输出？
 
     ```lean
     @[reducible] def reducibleDef     : Nat := 1 -- same as `abbrev`
@@ -1287,17 +1170,17 @@ Lean parser.
       let reducedExpr ← Meta.reduce constantExpr
       dbg_trace (← ppExpr reducedExpr) -- ...
     ```
-10. [**Constructing Expressions**] Create expression `fun x, 1 + x` in two ways:
+10. [**构建表达式**] 通过两种方式创建表达式 `fun x, 1 + x`：
   **a)** not idiomatically, with loose bound variables
   **b)** idiomatically.
-  In what version can you use `Lean.mkAppN`? In what version can you use `Lean.Meta.mkAppM`?
-11. [**Constructing Expressions**] Create expression `∀ (yellow: Nat), yellow`.
-12. [**Constructing Expressions**] Create expression `∀ (n : Nat), n = n + 1` in two ways:
+  你可以在哪种方式中使用 `Lean.mkAppN`? 还有 `Lean.Meta.mkAppM`?
+11. [**构建表达式**] 创建表达式 `∀ (yellow: Nat), yellow`。
+12. [**构建表达式**] 通过两种方式创建表达式 `∀ (n : Nat), n = n + 1`：
   **a)** not idiomatically, with loose bound variables
   **b)** idiomatically.
   In what version can you use `Lean.mkApp3`? In what version can you use `Lean.Meta.mkEq`?
-13. [**Constructing Expressions**] Create expression `fun (f : Nat → Nat), ∀ (n : Nat), f n = f (n + 1)` idiomatically.
-14. [**Constructing Expressions**] What would you expect the output of the following code to be?
+13. [**构建表达式**] 创建表达式 `fun (f : Nat → Nat), ∀ (n : Nat), f n = f (n + 1)` idiomatically.
+14. [**构建表达式**] 你预计下面的代码会有怎么样的输出？
 
     ```lean
     #eval show Lean.Elab.Term.TermElabM _ from do
@@ -1313,6 +1196,5 @@ Lean parser.
       let (_, _, conclusion) ← lambdaMetaTelescope expr
       dbg_trace conclusion -- ...
     ```
-15. [**Backtracking**] Check that the expressions `?a + Int` and `"hi" + ?b` are definitionally equal with `isDefEq` (make sure to use the proper types or `Option.none` for the types of your metavariables!).
-Use `saveState` and `restoreState` to revert metavariable assignments.
+15. [**回溯**] 使用 `isDefEq` 检查表达式 `?a + Int` 和 `"hi" + ?b` 是否定义等价（确保为你的元变量使用正确的类型或 `Option.none`）。使用 `saveState` 和 `restoreState` 来恢复元变量赋值。
 -/

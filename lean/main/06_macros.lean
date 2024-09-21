@@ -1,17 +1,10 @@
 /-
-# Macros
+# 宏
 
-## What is a macro
-Macros in Lean are `Syntax → MacroM Syntax` functions. `MacroM` is the macro
-monad which allows macros to have some static guarantees we will discuss in the
-next section, you can mostly ignore it for now.
+## 什么是宏
+Lean 中的宏是 `Syntax → MacroM Syntax` 类型的函数。`MacroM` 是宏的单子，它允许宏拥有一些静态保证，我们将在下一节中讨论这些保证，目前你可以暂时忽略它。
 
-Macros are registered as handlers for a specific syntax declaration using the
-`macro` attribute. The compiler will take care of applying these function
-to the syntax for us before performing actual analysis of the input. This
-means that the only thing we have to do is declare our syntax with a specific
-name and bind a function of type `Lean.Macro` to it. Let's try to reproduce
-the `LXOR` notation from the `Syntax` chapter:
+宏作为特定语法声明的处理器使用 `macro` 属性来声明。编译器会在实际分析输入之前自动将这些函数应用到语法上。这意味着我们只需声明一个特定名称的语法，并将一个类型为 `Lean.Macro` 的函数绑定到它上面。让我们尝试重现 `Syntax` 章节中的 `LXOR` 符号：
 -/
 
 import Lean
@@ -21,7 +14,7 @@ open Lean
 syntax:10 (name := lxor) term:10 " LXOR " term:11 : term
 
 @[macro lxor] def lxorImpl : Macro
-  | `($l:term LXOR $r:term) => `(!$l && $r) -- we can use the quotation mechanism to create `Syntax` in macros
+  | `($l:term LXOR $r:term) => `(!$l && $r) -- 我们可以使用引号机制在宏中创建 `Syntax`
   | _ => Macro.throwUnsupported
 
 #eval true LXOR true -- false
@@ -30,55 +23,37 @@ syntax:10 (name := lxor) term:10 " LXOR " term:11 : term
 #eval false LXOR false -- false
 
 /-
-That was quite easy! The `Macro.throwUnsupported` function can be used by a macro
-to indicate that "it doesn't feel responsible for this syntax". In this case
-it's merely used to fill a wildcard pattern that should never be reached anyways.
+这非常简单！宏可以使用 `Macro.throwUnsupported` 函数表示它“不认为自己负责处理这种语法”。在这个例子中，它仅仅用于填充一个永远不应该被触发的通配符模式。
 
-However we can in fact register multiple macros for the same syntax this way
-if we desire, they will be tried one after another (the later registered ones have
-higher priority)  -- is "higher" correct?
-until one throws either a real error using `Macro.throwError` or succeeds, that
-is it does not `Macro.throwUnsupported`. Let's see this in action:
+事实上，如果我们愿意，我们可以为相同的语法编写多个宏。它们将一个接一个地尝试（后编写的宏具有更高优先级）直到某个宏要么抛出真正的错误（使用 `Macro.throwError`），要么成功，也就是说它没有 `Macro.throwUnsupported`。让我们看看这个功能的实际效果：
 -/
 
 @[macro lxor] def lxorImpl2 : Macro
-  -- special case that changes behaviour of the case where the left and
-  -- right hand side are these specific identifiers
+  -- 处理左右两侧为这些特定标识符的特殊情况
   | `(true LXOR true) => `(true)
   | _ => Macro.throwUnsupported
 
-#eval true LXOR true -- true, handled by new macro
-#eval true LXOR false -- false, still handled by the old
+#eval true LXOR true -- true，由新宏处理
+#eval true LXOR false -- false，仍由旧宏处理
 
 /-
-This capability is obviously *very* powerful! It should not be used
-lightly and without careful thinking since it can introduce weird
-behaviour while writing code later on. The following example illustrates
-this weird behaviour:
+这种能力显然非常强大！在不经过深思熟虑的情况下不要轻易使用它，因为它可能在编写代码时引入奇怪的行为。以下例子展示了这种奇怪的行为：
 -/
 
-#eval true LXOR true -- true, handled by new macro
+#eval true LXOR true -- true，由新宏处理
 
 def foo := true
-#eval foo LXOR foo -- false, handled by old macro, after all the identifiers have a different name
+#eval foo LXOR foo -- false，由旧宏处理，毕竟标识符的名字不同
 
 /-
-Without knowing exactly how this macro is implemented this behaviour
-will be very confusing to whoever might be debugging an issue based on this.
-The rule of thumb for when to use a macro vs. other mechanisms like
-elaboration is that as soon as you are building real logic like in the 2nd
-macro above, it should most likely not be a macro but an elaborator
-(explained in the elaboration chapter). This means ideally we want to
-use macros for simple syntax to syntax translations, that a human could
-easily write out themselves as well but is too lazy to.
+如果不知道这个宏是如何实现的，那么调试这个问题的开发者可能会非常困惑。
 
-## Simplifying macro declaration
-Now that we know the basics of what a macro is and how to register it
-we can take a look at slightly more automated ways to do this (in fact
-all of the ways about to be presented are implemented as macros themselves).
+关于何时应该使用宏而不是其他机制（如繁饰），经验法则是：当你开始构建真正的逻辑时，例如上面第二个宏中的逻辑，它很可能不应该是一个宏，而应该是一个繁饰器（繁饰器将在繁饰章节中进行讲解）。这意味着理想情况下，我们希望将宏用于简单的语法到语法的转换，人类也可以轻松地手动编写这些转换，但可能嫌麻烦。
 
-First things first there is `macro_rules` which basically desugars to
-functions like the ones we wrote above, for example:
+## 简化宏声明
+现在我们了解了宏的基础知识以及如何编写宏，我们可以来看一些稍微自动化的方式（事实上，接下来要介绍的所有方式都是通过宏自己实现的）。
+
+首先是 `macro_rules`，它基本上是对我们上面编写的函数的语法糖，例如：
 -/
 
 syntax:10 term:10 " RXOR " term:11 : term
@@ -87,17 +62,14 @@ macro_rules
   | `($l:term RXOR $r:term) => `($l && !$r)
 
 /-
-As you can see, it figures out lot's of things on its own for us:
-- the name of the syntax declaration
-- the `macro` attribute registration
-- the `throwUnsupported` wildcard
+它自动完成了许多事情：
+- 语法声明的名称
+- `macro` 属性的注册
+- `throwUnsupported` 的通配符
 
-apart from this it just works like a function that is using pattern
-matching syntax, we can in theory encode arbitrarily complex macro
-functions on the right hand side.
+除此之外，它就像一个使用模式匹配语法的函数一样工作，理论上我们可以在右侧编写任意复杂的宏函数。
 
-If this is still not short enough for you, there is a next step using the
-`macro` macro:
+如果你觉得这还不够简短，可以使用 `macro` 语法糖：
 -/
 
 macro l:term:10 " ⊕ " r:term:11 : term => `((!$l && $r) || ($l && !$r))
@@ -107,101 +79,67 @@ macro l:term:10 " ⊕ " r:term:11 : term => `((!$l && $r) || ($l && !$r))
 #eval false ⊕ true -- true
 #eval false ⊕ false -- false
 
+
 /-
-As you can see, `macro` is quite close to `notation` already:
-- it performed syntax declaration for us
-- it automatically wrote a `macro_rules` style function to match on it
+如你所见，`macro` 已经非常接近 `notation` 了：
+- 它为我们进行了语法声明
+- 它自动生成了一个 `macro_rules` 风格的函数来匹配语法
 
-The are of course differences as well:
-- `notation` is limited to the `term` syntax category
-- `notation` cannot have arbitrary macro code on the right hand side
+当然，它们之间也有一些区别：
+- `notation` 仅限于 `term` 语法类别
+- `notation` 不能在右侧包含任意的宏代码
 
-## `Syntax` Quotations
-### The basics
-So far we've handwaved the `` `(foo $bar) `` syntax to both create and
-match on `Syntax` objects but it's time for a full explanation since
-it will be essential to all non trivial things that are syntax related.
+## `Syntax` 引号
+### 基础知识
+到目前为止，我们使用了 `` `(foo $bar) `` 语法来创建和匹配 `Syntax` 对象，但现在是时候进行完整的解释了，因为它在进阶的语法中至关重要。
 
-First things first we call the `` `() `` syntax a `Syntax` quotation.
-When we plug variables into a syntax quotation like this: `` `($x) ``
-we call the `$x` part an anti-quotation. When we insert `x` like this
-it is required that `x` is of type `TSyntax y` where `y` is some `Name`
-of a syntax category. The Lean compiler is actually smart enough to figure
-the syntax categories that are allowed in this place out. Hence you might
-sometimes see errors of the form:
+首先我们称 `` `() `` 语法为 `Syntax` 引号。当我们将变量插入到语法引号中，如：`` `($x) ``，我们称 `$x` 部分为反引号（anti-quotation）。当我们像这样插入 `x` 时，要求 `x` 的类型为 `TSyntax y`，其中 `y` 是某种语法类别的名称。Lean 编译器实际上足够智能，能够推断出允许在此处使用的语法类别。因此，你有时可能会看到如下形式的错误：
 ```
-application type mismatch
+application type mismatch 应用类型不匹配
   x.raw
-argument
+argument 参数
   x
-has type
+has type 类型为
   TSyntax `a : Type
-but is expected to have type
+but is expected to have type 但期望的类型为
   TSyntax `b : Type
 ```
-If you are sure that your thing from the `a` syntax category can be
-used as a `b` here you can declare a coercion of the form:
+如果你确信来自 `a` 语法类别的元素可以用作 `b`，你可以声明如下形式的类型转换：
 -/
 
 instance : Coe (TSyntax `a) (TSyntax `b) where
   coe s := ⟨s.raw⟩
 
 /-!
-Which will allow Lean to perform the type cast automatically. If you
-notice that your `a` can not be used in place of the `b` here congrats,
-you just discovered a bug in your `Syntax` function. Similar to the Lean
-compiler, you could also declare functions that are specific to certain
-`TSyntax` variants. For example as we have seen in the syntax chapter
-there exists the function:
+这将允许 Lean 自动执行类型转换。如果你发现你的 `a` 不能在此处替代 `b`，恭喜你，你刚刚发现了你的 `Syntax` 函数中的一个 bug。类似于 Lean 编译器，你还可以声明特定于某些 `TSyntax` 变体的函数。例如，如我们在语法章节中所见，已经存在如下函数：
 -/
+
 #check TSyntax.getNat -- TSyntax.getNat : TSyntax numLitKind → Nat
+
 /-!
-Which is guaranteed to not panic because we know that the `Syntax` that
-the function is receiving is a numeric literal and can thus naturally
-be converted to a `Nat`.
+此函数不会发生错误，因为我们知道传递给它的 `Syntax` 是一个数字字面量，因此可以自然地转换为 `Nat`。
 
-If we use the antiquotation syntax in pattern matching it will, as discussed
-in the syntax chapter, give us a variable `x` of type `` TSyntax y `` where
-`y` is the `Name` of the syntax category that fits in the spot where we pattern matched.
-If we wish to insert a literal `$x` into the `Syntax` for some reason,
-for example macro creating macros, we can escape the anti quotation using: `` `($$x) ``.
+如果我们在模式匹配中使用反引号语法，如前面提到的，它将为我们提供类型为 `TSyntax y` 的变量 `x`，其中 `y` 是适合我们模式匹配位置的语法类别名称。如果出于某种原因我们想要将字面量 `$x` 插入到 `Syntax` 中，例如用于创建宏的宏，我们可以使用 `` `($$x) `` 来取消反引号（类似C等语言中的两次反斜杠转义）。
 
-If we want to specify the syntax kind we wish `x` to be interpreted as
-we can make this explicit using: `` `($x:term) `` where `term` can be
-replaced with any other valid syntax category (e.g. `command`) or parser
-(e.g. `ident`).
+如果我们希望指定 `x` 的语法类型，可以使用 `` `($x:term) ``，其中 `term` 可以替换为任何其他有效的语法类别（如 `command`）或解析器（如 `ident`）。
 
-So far this is only a more formal explanation of the intuitive things
-we've already seen in the syntax chapter and up to now in this chapter,
-next we'll discuss some more advanced anti-quotations.
+到目前为止，这只是对我们在语法章节中以及本章至今所见的直观概念的更正式解释，接下来我们将讨论一些更高级的反引号用法。
 
-### Advanced anti-quotations
-For convenience we can also use anti-quotations in a way similar to
-format strings: `` `($(mkIdent `c)) `` is the same as: `` let x := mkIdent `c; `($x) ``.
+### 高级反引号
+为了方便起见，我们还可以以类似格式字符串的方式使用反引号：`` `($(mkIdent `c)) `` 与 `` let x := mkIdent `c; `($x) `` 是等价的。
 
-Furthermore there are sometimes situations in which we are not working
-with basic `Syntax` but `Syntax` wrapped in more complex datastructures,
-most notably `Array (TSyntax c)` or `TSepArray c s`. Where `TSepArray c s`, is a
-`Syntax` specific type, it is what we get if we pattern match on some
-`Syntax` that users a separator `s` to separate things from the category `c`.
-For example if we match using: `$xs,*`, `xs` will have type `TSepArray c ","`,.
-With the special case of matching on no specific separator (i.e. whitespace):
-`$xs*` in which we will receive an `Array (TSyntax c)`.
+此外，有时我们处理的并不是基本的 `Syntax`，而是更复杂的数据结构中包含的 `Syntax`，最典型的是 `Array (TSyntax c)` 或 `TSepArray c s`。其中 `TSepArray c s` 是一个 `Syntax` 特定类型，它是当我们在使用分隔符 `s` 来分隔 `c` 类别的元素时通过模式匹配得到的。例如，如果我们使用 `$xs,*` 进行匹配，`xs` 的类型将是 `TSepArray c ","`。而匹配时没有特定分隔符（即空白）时，如 `$xs*`，我们将得到 `Array (TSyntax c)`。
 
-If we are dealing with `xs : Array (TSyntax c)` and want to insert it into
-a quotation we have two main ways to achieve this:
-1. Insert it using a separator, most commonly `,`: `` `($xs,*) ``.
-  This is also the way to insert a `TSepArray c ",""`
-2. Insert it point blank without a separator (TODO): `` `() ``
-
-For example:
+如果我们正在处理 `xs : Array (TSyntax c)` 并且想要将其插入到引号中，有两种主要方法可以实现：
+1. 使用分隔符插入，最常见的是逗号：`` `($xs,*) ``。这也是插入 `TSepArray c ",""` 的方式。
+2. 直接无分隔符插入（TODO）：`` `() ``
 -/
 
--- syntactically cut away the first element of a tuple if possible
+-- 如果可能的话，在语法上从元组中切掉第一个元素
 syntax "cut_tuple " "(" term ", " term,+ ")" : term
 
 macro_rules
-  -- cutting away one element of a pair isn't possible, it would not result in a tuple
+  -- 切掉一对中的一个元素是不可能的，因为这不会形成元组
   | `(cut_tuple ($x, $y)) => `(($x, $y))
   | `(cut_tuple ($x, $y, $xs,*)) => `(($y, $xs,*))
 
@@ -209,45 +147,30 @@ macro_rules
 #check cut_tuple (1, 2, 3) -- (2, 3) : Nat × Nat
 
 /-!
-The last thing for this section will be so called "anti-quotation splices".
-There are two kinds of anti quotation splices, first the so called optional
-ones. For example we might declare a syntax with an optional argument,
-say our own `let` (in real projects this would most likely be a `let`
-in some functional language we are writing a theory about):
+本节的最后一部分将介绍所谓的「反引号拼接」。反引号拼接有两种类型，首先是可选拼接。例如，我们可能会声明一个带有可选参数的语法，比如我们自己的 `let`。（现实例子是，仿写另一种函数式语言中的 `let`）：
 -/
 
 syntax "mylet " ident (" : " term)? " := " term " in " term : term
 
 /-!
-There is this optional `(" : " term)?` argument involved which can let
-the user define the type of the term to the left of it. With the methods
-we know so far we'd have to write two `macro_rules` now, one for the case
-with, one for the case without the optional argument. However the rest
-of the syntactic translation works exactly the same with and without
-the optional argument so what we can do using a splice here is to essentially
-define both cases at once:
+这里涉及一个可选参数 `(" : " term)?`，用户可以通过它定义左边项的类型。按照我们目前掌握的方法，我们需要编写两个 `macro_rules`，一个处理带可选参数的情况，一个处理不带的情况。然而，语法翻译的其余部分在有无可选参数的情况下完全相同，因此我们可以使用拼接来同时定义两种情况：
 -/
 
 macro_rules
   | `(mylet $x $[: $ty]? := $val in $body) => `(let $x $[: $ty]? := $val; $body)
 
 /-!
-The `$[...]?` part is the splice here, it basically says "if this part of
-the syntax isn't there, just ignore the parts on the right hand side that
-involve anti quotation variables involved here". So now we can run
-this syntax both with and without type ascription:
+这里的 `$[...]?` 部分就是拼接，它的作用基本上是说「如果这部分语法不存在，那么就忽略右侧涉及的反引号变量」。所以现在我们可以在无论有无类型说明的情况下运行这个语法：
 -/
 
-#eval mylet x := 5 in x - 10 -- 0, due to subtraction behaviour of `Nat`
-#eval mylet x : Int := 5 in x - 10 -- -5, after all it is an `Int` now
+#eval mylet x := 5 in x - 10 -- 0，因为 `Nat` 的减法行为
+#eval mylet x : Int := 5 in x - 10 -- -5，因为现在它是 `Int` 类型
 
 /-!
-The second and last splice might remind readers of list comprehension
-as seen for example in Python. We will demonstrate it using an implementation
-of `map` as a macro:
+第二种拼接可能会让读者联想到例如在 Python 中看到的列表推导式。演示：
 -/
 
--- run the function given at the end for each element of the list
+-- 对每个列表元素执行函数
 syntax "foreach " "[" term,* "]" term : term
 
 macro_rules
@@ -256,103 +179,63 @@ macro_rules
 #eval foreach [1,2,3,4] (Nat.add 2) -- [3, 4, 5, 6]
 
 /-!
-In this case the `$[...],*` part is the splice. On the match side it tries
-to match the pattern we define inside of it repetitively (given the separator
-we tell it to). However unlike regular separator matching it does not
-give us an `Array` or `SepArray`, instead it allows us to write another
-splice on the right hand side that gets evaluated for each time the
-pattern we specified matched, with the specific values from the match
-per iteration.
+在这种情况下，`$[...],*` 部分是拼接。在匹配部分，它会尝试根据我们定义的模式进行重复匹配（根据我们指定的分隔符）。然而，不同于常规的分隔符匹配，它不会返回 `Array` 或 `SepArray`，而是允许我们在右侧写另一个拼接，每次匹配到我们指定的模式时，该拼接都会被计算，并使用每次匹配中的特定值。
 -/
 
 /-!
-## Hygiene issues and how to solve them
-If you are familiar with macro systems in other languages like C you
-probably know about so called macro hygiene issues already.
-A hygiene issue is when a macro introduces an identifier that collides with an
-identifier from some syntax that it is including. For example:
+## 卫生问题及其解决方案
+如果你熟悉其他语言（如 C）的宏系统，你可能已经听说过所谓的宏卫生问题。宏卫生问题指的是，当宏引入的标识符与它包含的某些语法中的标识符发生冲突时。例如:
 -/
 
--- Applying this macro produces a function that binds a new identifier `x`.
+-- 应用这个宏会生成一个绑定了新标识符 `x` 的函数。
 macro "const" e:term : term => `(fun x => $e)
 
--- But `x` can also be defined by a user
+-- 但是 `x` 也可以由用户定义
 def x : Nat := 42
 
--- Which `x` should be used by the compiler in place of `$e`?
+-- 编译器在替换 `$e` 时应该使用哪个 `x`？
 #eval (const x) 10 -- 42
 
 /-
-Given the fact that macros perform only syntactic translations one might
-expect the above `eval` to return 10 instead of 42: after all, the resulting
-syntax should be `(fun x => x) 10`. While this was of course not the intention
-of the author, this is what would happen in more primitive macro systems like
-the one of C. So how does Lean avoid these hygiene issues? You can read
-about this in detail in the excellent [Beyond Notations](https://lmcs.episciences.org/9362/pdf)
-paper which discusses the idea and implementation in Lean in detail.
-We will merely give an overview of the topic, since the details are not
-that interesting for practical uses. The idea described in Beyond Notations
-comes down to a concept called "macro scopes". Whenever a new macro
-is invoked, a new macro scope (basically a unique number) is added to
-a list of all the macro scopes that are active right now. When the current
-macro introduces a new identifier what is actually getting added is an
-identifier of the form:
+鉴于宏只执行语法转换，你可能会预期上面的 `eval` 返回 10 而不是 42：毕竟，结果语法应该是 `(fun x => x) 10`。虽然这显然不是作者的本意，但在更原始的宏系统（如 C 语言的宏系统）中，这就是会发生的情况。那么 Lean 是如何避免这些宏卫生问题的呢？你可以在出色的论文 [Beyond Notations](https://lmcs.episciences.org/9362/pdf) 中详细阅读 Lean 的这个思想和实现。我们这里只做一个概述，因为具体细节对实际使用没有那么大的意义。
+
+《Beyond Notations》提出的思想归结为一个叫做「宏作用域」（macro scopes）的概念。每当一个新的宏被调用时，一个新的宏作用域（基本上是一个唯一的数字）会被添加到当前所有活跃宏作用域的列表中。当目前的宏引入一个新标识符时，实际上被添加的是以下形式的标识符：
 ```
-<actual name>._@.(<module_name>.<scopes>)*.<module_name>._hyg.<scopes>
+<实际名称>._@.(<模块名称>.<作用域>)*.<模块名称>._hyg.<作用域>
 ```
-For example, if the module name is `Init.Data.List.Basic`, the name is
-`foo.bla`, and macros scopes are [2, 5] we get:
+例如，如果模块名称是 `Init.Data.List.Basic`，名称是 `foo.bla`，宏作用域是 [2, 5]，我们得到的标识符是：
 ```
 foo.bla._@.Init.Data.List.Basic._hyg.2.5
 ```
-Since macro scopes are unique numbers the list of macro scopes appended in the end
-of the name will always be unique across all macro invocations, hence macro hygiene
-issues like the ones above are not possible.
+由于宏作用域是唯一的数字，附加在名称末尾的宏作用域列表将在所有宏调用中保持唯一，因此像上面那样的宏卫生问题是不可能出现的。
 
-If you are wondering why there is more than just the macro scopes to this
-name generation, that is because we may have to combine scopes from different files/modules.
-The main module being processed is always the right most one.
-This situation may happen when we execute a macro generated in a file
-imported in the current file.
+如果你想知道为什么除了宏作用域之外还有其他内容，那是因为我们可能需要组合来自不同文件/模块的作用域。当前处理的主模块总是最右边的一个。这种情况可能发生在我们执行从当前文件导入的文件中生成的宏时。例如：
 ```
 foo.bla._@.Init.Data.List.Basic.2.1.Init.Lean.Expr_hyg.4
 ```
-The delimiter `_hyg` at the end is used just to improve performance of
-the function `Lean.Name.hasMacroScopes` -- the format could also work without it.
+末尾的 `_hyg` 分隔符只是为了提高 `Lean.Name.hasMacroScopes` 函数的性能 -- 这种格式没有它也能工作。
 
-This was a lot of technical details. You do not have to understand them
-in order to use macros, if you want you can just keep in mind that Lean
-will not allow name clashes like the one in the `const` example.
+以上有很多技术细节。你不需要理解它们也可以使用宏，只需记住 Lean 不会允许像 `const` 示例中那样的名称冲突问题。
 
-Note that this extends to *all* names that are introduced using syntax
-quotations, that is if you write a macro that produces:
-`` `(def foo := 1) ``, the user will not be able to access `foo`
-because the name will subject to hygiene. Luckily there is a way to
-circumvent this. You can use `mkIdent` to generate a raw identifier,
-for example: `` `(def $(mkIdent `foo) := 1) ``. In this case it won't
-be subject to hygiene and accessible to the user.
+请注意，这适用于**所有**使用语法引用引入的名称，也就是说，如果你编写了一个生成以下代码的宏：
+```
+`(def foo := 1)
+```
+用户将无法访问 `foo`，因为这个名称会受到卫生规则的影响。幸运的是，有一种方法可以绕过这个问题。你可以使用 `mkIdent` 来生成一个原始标识符，例如：
+```
+`(def $(mkIdent `foo) := 1)
+```
+在这种情况下，它将不会受宏卫生规则影响，用户可以访问该名称。
 
-## `MonadQuotation` and `MonadRef`
-Based on this description of the hygiene mechanism one interesting
-question pops up, how do we know what the current list of macro scopes
-actually is? After all in the macro functions that were defined above
-there is never any explicit passing around of the scopes happening.
-As is quite common in functional programming, as soon as we start
-having some additional state that we need to bookkeep (like the macro scopes)
-this is done with a monad, this is the case here as well with a slight twist.
+## `MonadQuotation` 和 `MonadRef`
 
-Instead of implementing this for only a single monad `MacroM` the general
-concept of keeping track of macro scopes in monadic way is abstracted
-away using a type class called `MonadQuotation`. This allows any other
-monad to also easily provide this hygienic `Syntax` creation mechanism
-by simply implementing this type class.
+基于上述宏卫生机制的描述，出现了一个有趣的问题：我们如何知道当前的宏作用域列表到底是什么？毕竟，在上面定义的宏函数中，并没有显式地传递这些作用域的过程。正如在函数式编程中常见的那样，当我们需要跟踪一些额外的状态（比如宏作用域）时，通常会使用一个单子来处理。在这里也是如此，不过有一点小小的不同。
 
-This is also the reason that while we are able to use pattern matching on syntax
-with `` `(syntax) `` we cannot just create `Syntax` with the same
-syntax in pure functions: there is no `Monad` implementing `MonadQuotation`
-involved in order to keep track of the macro scopes.
+这里并不是仅为单个 `MacroM` 单子实现这个功能，而是通过一个叫做 `MonadQuotation` 的类型类抽象出跟踪宏作用域的通用概念。这样，任何其他单子只需实现这个类型类，就可以轻松提供这种带有卫生性的 `Syntax` 创建机制。
 
-Now let's take a brief look at the `MonadQuotation` type class:
+这也是为什么我们虽然可以使用 `` `(syntax) `` 对语法进行模式匹配，但不能在纯函数中直接用相同的语法创建 `Syntax` 的原因：因为没有涉及到实现了 `MonadQuotation` 的 `Monad` 来跟踪宏作用域。
+
+现在让我们简要看看 `MonadQuotation` 类型类：
 -/
 
 namespace Playground
@@ -369,58 +252,41 @@ class MonadQuotation (m : Type → Type) extends MonadRef m where
 end Playground
 
 /-
-Since `MonadQuotation` is based on `MonadRef`, let's take a look at `MonadRef`
-first. The idea here is quite simple: `MonadRef` is meant to be seen as an extension
-to the `Monad` typeclass which
-- gives us a reference to a `Syntax` value with `getRef`
-- can evaluate a certain monadic action `m α` with a new reference to a `Syntax`
-  using `withRef`
+由于 `MonadQuotation` 基于 `MonadRef`，我们先来看看 `MonadRef`。其核心思想非常简单：`MonadRef` 作为 `Monad` 类型类的扩展，它提供了以下功能：
 
-On it's own `MonadRef` isn't exactly interesting, but once it is combined with
-`MonadQuotation` it makes sense.
+- 通过 `getRef` 获取对 `Syntax` 值的引用。
+- 使用 `withRef` 在新的 `Syntax` 引用下执行某个 monadic 操作 `m α`。
 
-As you can see `MonadQuotation` extends `MonadRef` and adds 3 new functions:
-- `getCurrMacroScope` which obtains the latest `MacroScope` that was created
-- `getMainModule` which (obviously) obtains the name of the main module,
-  both of these are used to create these hygienic identifiers explained above
-- `withFreshMacroScope` which will compute the next macro scope and run
-  some computation `m α` that performs syntax quotation with this new
-  macro scope in order to avoid name clashes. While this is mostly meant
-  to be used internally whenever a new macro invocation happens, it can sometimes
-  make sense to use this in our own macros, for example when we are generating
-  some syntax block repeatedly and want to avoid name clashes.
+单独来看，`MonadRef` 并不是特别有趣，但一旦与 `MonadQuotation` 结合，它就有了意义。
 
-How `MonadRef` comes into play here is that Lean requires a way to indicate
-errors at certain positions to the user. One thing that wasn't introduced
-in the `Syntax` chapter is that values of type `Syntax` actually carry their
-position in the file around as well. When an error is detected, it is usually
-bound to a `Syntax` value which tells Lean where to indicate the error in the file.
-What Lean will do when using `withFreshMacroScope` is to apply the position of
-the result of `getRef` to each introduced symbol, which then results in better
-error positions than not applying any position.
+如你所见，`MonadQuotation` 扩展了 `MonadRef`，并增加了三个新函数：
 
-To see error positioning in action, we can write a little macro that makes use of it:
+- `getCurrMacroScope`：获取最新创建的 `MacroScope`。
+- `getMainModule`：获取主模块的名称。这两个函数用于创建上面提到的带有卫生性的标识符。
+- `withFreshMacroScope`：计算下一个宏作用域，并运行某些执行语法引用的计算 `m α`，以避免名称冲突。虽然这主要用于内部在新宏调用发生时调用，但在我们编写自己的宏时有时也有用，比如当我们反复生成某些语法块时，想要避免名称冲突。
+
+`MonadRef` 在这里的作用是 Lean 需要一种方式来向用户指示某些位置的错误。一个没有在 `Syntax` 章节介绍的内容是，类型为 `Syntax` 的值实际上携带了它们在文件中的位置信息。当检测到错误时，通常会绑定到一个 `Syntax` 值上，以便 Lean 能够在文件中准确指示错误位置。
+
+当使用 `withFreshMacroScope` 时，Lean 会将 `getRef` 的结果位置应用到每个引入的符号上，从而生成更准确的错误位置信息，而不是没有位置信息。
+
+为了看到错误定位的实际效果，我们可以写一个小的宏来展示这个功能：
 -/
 
 syntax "error_position" ident : term
 
 macro_rules
   | `(error_position all) => Macro.throwError "Ahhh"
-  -- the `%$tk` syntax gives us the Syntax of the thing before the %,
-  -- in this case `error_position`, giving it the name `tk`
+  -- `%$tk` 语法给 `%` 之前的东西命名为 `tk`，本例中是 `error_position`。
   | `(error_position%$tk first) => withRef tk (Macro.throwError "Ahhh")
 
-#check_failure error_position all -- the error is indicated at `error_position all`
-#check_failure error_position first -- the error is only indicated at `error_position`
+#check_failure error_position all -- 错误在 `error_position all` 处显示
+#check_failure error_position first -- 错误仅在 `error_position` 处显示
 
 /-
-Obviously controlling the positions of errors in this way is quite important
-for a good user experience.
+显然，以这种方式控制错误的位置对提供良好的用户体验非常重要。
 
-## Mini project
-As a final mini project for this section we will re-build the arithmetic
-DSL from the syntax chapter in a slightly more advanced way, using a macro
-this time so we can actually fully integrate it into the Lean syntax.
+## 项目示例
+作为本节的最终迷你项目，我们将以稍微更高级的方式重建语法章节中的算术 DSL，这次我们将使用宏来实现，从而可以将其完全集成到 Lean 语法中。
 -/
 declare_syntax_cat arith
 
@@ -432,74 +298,66 @@ syntax "[Arith|" arith "]" : term
 
 macro_rules
   | `([Arith| $x:num]) => `($x)
-  | `([Arith| $x:arith + $y:arith]) => `([Arith| $x] + [Arith| $y]) -- recursive macros are possible
+  | `([Arith| $x:arith + $y:arith]) => `([Arith| $x] + [Arith| $y]) -- 递归宏是可以实现的
   | `([Arith| $x:arith - $y:arith]) => `([Arith| $x] - [Arith| $y])
   | `([Arith| ($x:arith)]) => `([Arith| $x])
 
 #eval [Arith| (12 + 3) - 4] -- 11
 
-/-! Again feel free to play around with it. If you want to build more complex
-things, like expressions with variables, maybe consider building an inductive type
-using macros instead. Once you got your arithmetic expression term
-as an inductive, you could then write a function that takes some form of
-variable assignment and evaluates the given expression for this
-assignment. You could also try to embed arbitrary `term`s into your
-arith language using some special syntax or whatever else comes to your mind.
--/
-
 /-!
-## More elaborate examples
-### Binders 2.0
-As promised in the syntax chapter here is Binders 2.0. We'll start by
-reintroducing our theory of sets:
+如果你想构建更复杂的内容，比如包含变量的表达式，或许可以考虑使用宏来构建一个归纳类型。一旦你将算术表达式作为归纳类型，你就可以编写一个函数，该函数接受某种形式的变量赋值并对给定表达式进行求值。你还可以尝试使用一些特殊的语法将任意 `term` 嵌入到你的算术语言中，或者发挥你的想象力做其他事情。
+
+## 更复杂的示例
+### 绑定（续）
+正如在语法章节中所承诺的，这里是绑定 2.0。我们将从重新引入集合理论开始：
 -/
 def Set (α : Type u) := α → Prop
 def Set.mem (x : α) (X : Set α) : Prop := X x
 
--- Integrate into the already existing typeclass for membership notation
+-- 集成到已经存在的成员符号类中
 instance : Membership α (Set α) where
   mem := Set.mem
 
 def Set.empty : Set α := λ _ => False
 
--- the basic "all elements such that" function for the notation
+-- 基本的 "所有满足某条件的元素" 函数，用于符号表示法
 def setOf {α : Type} (p : α → Prop) : Set α := p
 
 /-!
-The goal for this section will be to allow for both `{x : X | p x}`
-and `{x ∈ X, p x}` notations. In principle there are two ways to do this:
-1. Define a syntax and macro for each way to bind a variable we might think of
-2. Define a syntax category of binders that we could reuse across other
-   binder constructs such as `Σ` or `Π` as well and implement macros for
-   the `{ | }` case
+本节的目标是允许 `{x : X | p x}` 和 `{x ∈ X, p x}` 的表示法。原则上，有两种方法可以实现：
+1. 为每种可能的绑定变量的方式定义语法和宏
+2. 定义一种可以在其他绑定构造（例如 `Σ` 或 `Π`）中复用的绑定符号语法类别，并为 `{ | }` 的情况实现宏
 
-In this section we will use approach 2 because it is more easily reusable.
+在本节中，我们将采用方法 2，因为它更易于复用。
 -/
 
 declare_syntax_cat binder_construct
 syntax "{" binder_construct "|" term "}" : term
 
 /-!
-Now let's define the two binders constructs we are interested in:
+现在我们来定义两个我们感兴趣的绑定符号构造：
 -/
 syntax ident " : " term : binder_construct
 syntax ident " ∈ " term : binder_construct
 
 /-!
-And finally the macros to expand our syntax:
+最后，我们为语法扩展定义宏：
 -/
 
 macro_rules
   | `({ $var:ident : $ty:term | $body:term }) => `(setOf (fun ($var : $ty) => $body))
   | `({ $var:ident ∈ $s:term | $body:term }) => `(setOf (fun $var => $var ∈ $s ∧ $body))
 
--- Old examples with better syntax:
+/-
+以下是使用新语法的示例：
+-/
+-- 旧示例，使用更好的语法：
 #check { x : Nat | x ≤ 1 } -- setOf fun x => x ≤ 1 : Set Nat
 
 example : 1 ∈ { y : Nat | y ≤ 1 } := by simp[Membership.mem, Set.mem, setOf]
 example : 2 ∈ { y : Nat | y ≤ 3 ∧ 1 ≤ y } := by simp[Membership.mem, Set.mem, setOf]
 
--- New examples:
+-- 新示例：
 def oneSet : Set Nat := λ x => x = 1
 #check { x ∈ oneSet | 10 ≤ x } -- setOf fun x => x ∈ oneSet ∧ 10 ≤ x : Set Nat
 
@@ -514,11 +372,9 @@ example : ∀ x, ¬(x ∈ { y ∈ oneSet | y ≠ 1 }) := by
 
 
 /-!
-## Reading further
-If you want to know more about macros you can read:
-- the API docs: TODO link
-- the source code: the lower parts of [Init.Prelude](https://github.com/leanprover/lean4/blob/master/src/Init/Prelude.lean)
-  as you can see they are declared quite early in Lean because of their importance
-  to building up syntax
-- the aforementioned [Beyond Notations](https://lmcs.episciences.org/9362/pdf) paper
+## 拓展阅读
+如果你想了解更多关于宏的信息，可以阅读：
+- API 文档：待补充链接
+- 源代码：[Init.Prelude](https://github.com/leanprover/lean4/blob/master/src/Init/Prelude.lean) 的底层部分，如你所见，由于它们在构建语法中非常重要，因此在 Lean 中被很早声明
+- 前面提到的论文 [Beyond Notations](https://lmcs.episciences.org/9362/pdf)
 -/

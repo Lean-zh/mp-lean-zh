@@ -1,10 +1,7 @@
 /-
-# Extra: Options
-Options are a way to communicate some special configuration to both
-your meta programs and the Lean compiler itself. Basically it's just
-a [`KVMap`](https://github.com/leanprover/lean4/blob/master/src/Lean/Data/KVMap.lean)
-which is a simple map from `Name` to a `Lean.DataValue`. Right now there
-are 6 kinds of data values:
+# 额外内容：选项
+
+选项（Option）是一种向元程序和 Lean 编译器传达一些特殊配置的方法。基本上它只是一个 [`KVMap`](https://github.com/leanprover/lean4/blob/master/src/Lean/Data/KVMap.lean)，这是一个从 `Name` 到 `Lean.DataValue` 的简单映射。目前有 6 种数据值：
 - `String`
 - `Bool`
 - `Name`
@@ -12,8 +9,7 @@ are 6 kinds of data values:
 - `Int`
 - `Syntax`
 
-Setting an option to tell the Lean compiler to do something different
-with your program is quite simple with the `set_option` command:
+通过 `set_option` 命令设置一个选项，告诉 Lean 编译器对程序做一些不同的处理是非常简单的：
 -/
 
 import Lean
@@ -21,14 +17,14 @@ open Lean
 
 #check 1 + 1 -- 1 + 1 : Nat
 
-set_option pp.explicit true -- No custom syntax in pretty printing
+set_option pp.explicit true -- 在美观打印中不使用通常的语法
 
 #check 1 + 1 -- @HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) 1 1 : Nat
 
 set_option pp.explicit false
 
 /-!
-You can furthermore limit an option value to just the next command or term:
+你还可以将选项值限制为仅适用于下一个命令或表达式：
 -/
 
 set_option pp.explicit true in
@@ -36,31 +32,25 @@ set_option pp.explicit true in
 
 #check 1 + 1 -- 1 + 1 : Nat
 
-#check set_option trace.Meta.synthInstance true in 1 + 1 -- the trace of the type class synthesis for `OfNat` and `HAdd`
+#check set_option trace.Meta.synthInstance true in 1 + 1 -- 显示类型类合成 `OfNat` 和 `HAdd` 的途径
 
 /-!
-If you want to know which options are available out of the Box right now
-you can simply write out the `set_option` command and move your cursor
-to where the name is written, it should give you a list of them as auto
-completion suggestions. The most useful group of options when you are
-debugging some meta thing is the `trace.` one.
+如果你想知道目前有哪些选项可用，你可以直接码出 `set_option` 空一格然后编辑器会自动弹出代码建议。在调试某些元程序时，最有用的一类选项是 `trace.`。
 
-## Options in meta programming
-Now that we know how to set options, let's take a look at how a meta program
-can get access to them. The most common way to do this is via the `MonadOptions`
-type class, an extension to `Monad` that provides a function `getOptions : m Options`.
-As of now, it is implemented by:
+## 元编程中的选项
+现在我们已经知道如何设置选项了，接下来我们来看一下元程序如何访问这些选项。最常见的方法是通过 `MonadOptions` 类型类，这个类扩展了 `Monad`，提供了一个函数 `getOptions : m Options`。目前，它在以下类型中得到了实现：
 - `CoreM`
 - `CommandElabM`
 - `LevelElabM`
-- all monads to which you can lift operations of one of the above (e.g. `MetaM` from `CoreM`)
+- 所有可以提升上述某个类型操作的 monad（例如 `MetaM` 是从 `CoreM` 提升的）
 
-Once we have an `Options` object, we can query the information via `Options.get`.
-To show this, let's write a command that prints the value of `pp.explicit`.
+一旦我们有了 `Options` 对象，我们就可以通过 `Options.get` 查询相关信息。
+为了演示这一点，让我们编写一个命令来打印 `pp.explicit` 的值。
 -/
+
 elab "#getPPExplicit" : command => do
   let opts ← getOptions
-  -- defValue = default value
+  -- defValue = default value 默认值
   logInfo s!"pp.explicit : {opts.get pp.explicit.name pp.explicit.defValue}"
 
 #getPPExplicit -- pp.explicit : false
@@ -69,12 +59,10 @@ set_option pp.explicit true in
 #getPPExplicit -- pp.explicit : true
 
 /-!
-Note that the real implementation of getting `pp.explicit`, `Lean.getPPExplicit`,
-uses whether `pp.all` is set as a default value instead.
+注意到，获取 `pp.explicit` 的实际实现 `Lean.getPPExplicit` 使用了 `pp.all` 是否被设置作为默认值。
 
-## Making our own
-Declaring our own option is quite easy as well. The Lean compiler provides
-a macro `register_option` for this. Let's see it in action:
+## 自定义选项
+声明我们自己的选项也非常简单。Lean 编译器提供了一个宏 `register_option` 来实现这一功能。让我们来看一下它的用法：
 -/
 
 register_option book.myGreeting : String := {
@@ -84,6 +72,5 @@ register_option book.myGreeting : String := {
 }
 
 /-!
-However, we cannot just use an option that we just declared in the same file
-it was declared in because of initialization restrictions.
+然而，我们不能在声明选项的同一个文件中直接使用它，因为有初始化的限制。
 -/
