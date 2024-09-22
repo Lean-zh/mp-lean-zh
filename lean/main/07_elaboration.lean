@@ -1,104 +1,66 @@
 /-
-# Elaboration
+# 繁饰
 
-The elaborator is the component in charge of turning the user facing
-`Syntax` into something with which the rest of the compiler can work.
-Most of the time, this means translating `Syntax` into `Expr`s but
-there are also other use cases such as `#check` or `#eval`. Hence the
-elaborator is quite a large piece of code, it lives
-[here](https://github.com/leanprover/lean4/blob/master/src/Lean/Elab).
+繁饰器（Elaborator）是负责将面向用户的 `Syntax` 转换为编译器可以处理的内容的组件。大多数情况下，这意味着将 `Syntax` 转换为 `Expr`，但也有其他用例，例如 `#check` 或 `#eval`。因此，繁饰器是一大块代码，代码位于[这里](https://github.com/leanprover/lean4/blob/master/src/Lean/Elab)。
 
-## Command elaboration
-A command is the highest level of `Syntax`, a Lean file is made
-up of a list of commands. The most commonly used commands are declarations,
-for example:
+## 繁饰命令
+
+命令（Command）是最高层级的 `Syntax`，一个 Lean 文件由一系列命令组成。最常用的命令是声明，例如：
 - `def`
 - `inductive`
 - `structure`
 
-but there are also other ones, most notably `#check`, `#eval` and friends.
-All commands live in the `command` syntax category so in order to declare
-custom commands, their syntax has to be registered in that category.
+但也有其他命令，最著名的是 `#check`、`#eval` 等。所有命令都属于 `command` 语法类别，因此要声明自定义命令，必须在该类别中注册其语法。
 
-### Giving meaning to commands
-The next step is giving some semantics to the syntax. With commands, this
-is done by registering a so called command elaborator.
+### 为命令赋予意义
 
-Command elaborators have type `CommandElab` which is an alias for:
-`Syntax → CommandElabM Unit`. What they do, is take the `Syntax` that
-represents whatever the user wants to call the command and produce some
-sort of side effect on the `CommandElabM` monad, after all the return
-value is always `Unit`. The `CommandElabM` monad has 4 main kinds of
-side effects:
-1. Logging messages to the user via the `Monad` extensions
-   `MonadLog` and `AddMessageContext`, like `#check`. This is done via
-   functions that can be found in `Lean.Elab.Log`, the most notable ones
-   being: `logInfo`, `logWarning` and `logError`.
-2. Interacting with the `Environment` via the `Monad` extension `MonadEnv`.
-   This is the place where all of the relevant information for the compiler
-   is stored, all known declarations, their types, doc-strings, values etc.
-   The current environment can be obtained via `getEnv` and set via `setEnv`
-   once it has been modified. Note that quite often wrappers around `setEnv`
-   like `addDecl` are the correct way to add information to the `Environment`.
-3. Performing `IO`, `CommandElabM` is capable of running any `IO` operation.
-   For example reading from files and based on their contents perform
-   declarations.
-4. Throwing errors, since it can run any kind of `IO`, it is only natural
-   that it can throw errors via `throwError`.
+下一步是为语法赋予语义。对于命令，这是通过注册一个所谓的命令繁饰器完成的。
 
-Furthermore there are a bunch of other `Monad` extensions that are supported
-by `CommandElabM`:
-- `MonadRef` and `MonadQuotation` for `Syntax` quotations like in macros
-- `MonadOptions` to interact with the options framework
-- `MonadTrace` for debug trace information
-- TODO: There are a few others though I'm not sure whether they are relevant,
-  see the instance in `Lean.Elab.Command`
+命令繁饰器的类型是 `CommandElab`，或者说 `Syntax → CommandElabM Unit`。它们的作用是获取表示用户想要调用的命令的 `Syntax`，并在 `CommandElabM` 单子上产生某种副作用，毕竟返回值始终是 `Unit`。`CommandElabM` 单子有四种主要的副作用：
+1. 通过 `Monad` 扩展 `MonadLog` 和 `AddMessageContext` 向用户记录消息，例如 `#check`。这是通过 `Lean.Elab.Log` 中的函数完成的，其中最著名的是：`logInfo`、`logWarning` 和 `logError`。
+2. 通过 `Monad` 扩展 `MonadEnv` 与 `Environment` 交互。这里存储了编译器的所有相关信息，所有已知的声明、它们的类型、文档字符串、值等。当前环境可以通过 `getEnv` 获取，并在修改后通过 `setEnv` 设置。请注意，像 `addDecl` 这样的 `setEnv` 包装器通常是向 `Environment` 添加信息的正确方式。
+3. 执行 `IO`，`CommandElabM` 能够运行任何 `IO` 操作。例如，从文件中读取内容并根据其内容执行声明。
+4. 抛出错误，因为它可以运行任何类型的 `IO`，所以它自然可以通过 `throwError` 抛出错误。
 
-### Command elaboration
-Now that we understand the type of command elaborators let's take a brief
-look at how the elaboration process actually works:
-1. Check whether any macros can be applied to the current `Syntax`.
-   If there is a macro that does apply and does not throw an error
-   the resulting `Syntax` is recursively elaborated as a command again.
-2. If no macro can be applied, we search for all `CommandElab`s that have been
-   registered for the `SyntaxKind` of the `Syntax` we are elaborating,
-   using the `command_elab` attribute.
-3. All of these `CommandElab` are then tried in order until one of them does not throw an
-   `unsupportedSyntaxException`, Lean's way of indicating that the elaborator
-   "feels responsible"
-   for this specific `Syntax` construct. Note that it can still throw a regular
-   error to indicate to the user that something is wrong. If no responsible
-   elaborator is found, then the command elaboration is aborted with an `unexpected syntax`
-   error message.
+此外，`CommandElabM` 还支持其他一系列 `Monad` 扩展：
+- `MonadRef` 和 `MonadQuotation` 用于像宏中的 `Syntax` 引用
+- `MonadOptions` 用于与选项框架交互
+- `MonadTrace` 用于调试跟踪信息
+- TODO：还有一些其他的扩展，虽然不确定它们是否相关，可以参见 `Lean.Elab.Command` 中的实例。
 
-As you can see the general idea behind the procedure is quite similar to ordinary macro expansion.
+### 命令繁饰
 
-### Making our own
-Now that we know both what a `CommandElab` is and how they are used, we can
-start looking into writing our own. The steps for this, as we learned above, are:
-1. Declaring the syntax
-2. Declaring the elaborator
-3. Registering the elaborator as responsible for the syntax via the `command_elab`
-   attribute.
+现在我们已经了解了命令繁饰器的类型，接下来简要看看繁饰过程是如何实际工作的：
+1. 检查是否有任何宏可以应用于当前的 `Syntax`。如果有适用的宏，并且没有抛出错误，那么生成的 `Syntax` 将再次作为命令递归繁饰。
+2. 如果没有可用的宏，我们将使用 `command_elab` 属性，搜索为我们正在繁饰的 `Syntax` 的 `SyntaxKind` 注册的所有 `CommandElab`。
+3. 然后依次尝试所有这些 `CommandElab`，直到其中一个没有抛出 `unsupportedSyntaxException`，Lean 用这种方式表示繁饰器对这个特定的 `Syntax` 结构「负有责任」。请注意，它仍然可以抛出常规错误，以向用户表明某些地方出了问题。如果没有找到负责的繁饰器，那么命令繁饰将以 `unexpected syntax` 错误消息终止。
 
-Let's see how this is done:
+如你所见，这个过程背后的总体思路与普通宏扩展非常相似。
+
+### 创建我们自己的命令
+
+现在我们已经知道什么是 `CommandElab` 以及它们的使用方式，我们可以开始编写自己的命令了。正如我们上面所学的，步骤如下：
+1. 声明语法
+2. 声明繁饰器
+3. 通过 `command_elab` 属性要求繁饰器负责该语法。
+
+例子：
 -/
 
 import Lean
 
 open Lean Elab Command Term Meta
 
-syntax (name := mycommand1) "#mycommand1" : command -- declare the syntax
+syntax (name := mycommand1) "#mycommand1" : command -- 声明语法
 
 @[command_elab mycommand1]
-def mycommand1Impl : CommandElab := fun stx => do -- declare and register the elaborator
+def mycommand1Impl : CommandElab := fun stx => do -- 声明并注册繁饰器
   logInfo "Hello World"
 
 #mycommand1 -- Hello World
 
 /-!
-You might think that this is a little boiler-platey and it turns out the Lean
-devs did as well so they added a macro for this!
+你可能认为这有点模板化，Lean 的开发者们也这么认为，所以他们为此添加了一个宏！
 -/
 elab "#mycommand2" : command =>
   logInfo "Hello World"
@@ -106,9 +68,7 @@ elab "#mycommand2" : command =>
 #mycommand2 -- Hello World
 
 /-!
-Note that, due to the fact that command elaboration supports multiple
-registered elaborators for the same syntax, we can in fact overload
-syntax, if we want to.
+注意，由于命令繁饰支持为相同语法注册多个繁饰器，我们实际上可以在需要时重载语法。
 -/
 @[command_elab mycommand1]
 def myNewImpl : CommandElab := fun stx => do
@@ -117,21 +77,18 @@ def myNewImpl : CommandElab := fun stx => do
 #mycommand1 -- new!
 
 /-!
-Furthermore it is also possible to only overload parts of syntax by
-throwing an `unsupportedSyntaxException` in the cases we want the default
-handler to deal with it or just letting the `elab` command handle it.
+此外，也可以仅重载部分语法，在我们希望默认处理器处理的情况下抛出 `unsupportedSyntaxException`，或者让 `elab` 命令处理它。
 -/
 
 /-
-In the following example, we are not extending the original `#check` syntax,
-but adding a new `SyntaxKind` for this specific syntax construct.
-However, from the point of view of the user, the effect is basically the same.
+在以下示例中，我们并没有扩展原始的 `#check` 语法，而是为这个特定的语法结构添加了一个新的 `SyntaxKind`。不过，从用户的角度来看，效果基本相同。
 -/
+
 elab "#check" "mycheck" : command => do
   logInfo "Got ya!"
 
 /-
-This is actually extending the original `#check`
+这实际上是扩展了原始的 `#check`
 -/
 @[command_elab Lean.Parser.Command.check] def mySpecialCheck : CommandElab := fun stx => do
   if let some str := stx[1].isStrLit? then
@@ -144,134 +101,88 @@ This is actually extending the original `#check`
 #check Nat.add -- Nat.add : Nat → Nat → Nat
 
 /-!
-### Mini project
-As a final mini project for this section let's build a command elaborator
-that is actually useful. It will take a command and use the same mechanisms
-as `elabCommand` (the entry point for command elaboration) to tell us
-which macros or elaborators are relevant to the command we gave it.
+### 项目示例
 
-We will not go through the effort of actually reimplementing `elabCommand` though
+作为本节的最终迷你项目，让我们构建一个实用的命令繁饰器。它将接受一个命令，并使用与 `elabCommand`（命令繁饰的入口点）相同的机制，告诉我们哪些宏或繁饰器与我们给出的命令相关。
+
+不过，我们不会费力去真正重新实现 `elabCommand`。
 -/
 elab "#findCElab " c:command : command => do
   let macroRes ← liftMacroM <| expandMacroImpl? (←getEnv) c
   match macroRes with
-  | some (name, _) => logInfo s!"Next step is a macro: {name.toString}"
+  | some (name, _) => logInfo s!"下一步是一个宏: {name.toString}"
   | none =>
     let kind := c.raw.getKind
     let elabs := commandElabAttribute.getEntries (←getEnv) kind
     match elabs with
-    | [] => logInfo s!"There is no elaborators for your syntax, looks like its bad :("
-    | _ => logInfo s!"Your syntax may be elaborated by: {elabs.map (fun el => el.declName.toString)}"
+    | [] => logInfo s!"没有繁饰器可以处理你的语法"
+    | _ => logInfo s!"你的语法也许可以被以下繁饰器处理: {elabs.map (fun el => el.declName.toString)}"
 
-#findCElab def lala := 12 -- Your syntax may be elaborated by: [Lean.Elab.Command.elabDeclaration]
-#findCElab abbrev lolo := 12 -- Your syntax may be elaborated by: [Lean.Elab.Command.elabDeclaration]
-#findCElab #check foo -- even our own syntax!: Your syntax may be elaborated by: [mySpecialCheck, Lean.Elab.Command.elabCheck]
-#findCElab open Hi -- Your syntax may be elaborated by: [Lean.Elab.Command.elabOpen]
-#findCElab namespace Foo -- Your syntax may be elaborated by: [Lean.Elab.Command.elabNamespace]
-#findCElab #findCElab open Bar -- even itself!: Your syntax may be elaborated by: [«_aux_lean_elaboration___elabRules_command#findCElab__1»]
+#findCElab def lala := 12 -- 你的语法也许可以被以下繁饰器处理:  [Lean.Elab.Command.elabDeclaration]
+#findCElab abbrev lolo := 12 -- 你的语法也许可以被以下繁饰器处理:  [Lean.Elab.Command.elabDeclaration]
+#findCElab #check foo -- 甚至你自己的语法！: 你的语法也许可以被以下繁饰器处理:  [mySpecialCheck, Lean.Elab.Command.elabCheck]
+#findCElab open Hi -- 你的语法也许可以被以下繁饰器处理:  [Lean.Elab.Command.elabOpen]
+#findCElab namespace Foo -- 你的语法也许可以被以下繁饰器处理:  [Lean.Elab.Command.elabNamespace]
+#findCElab #findCElab open Bar -- 甚至它自己！: 你的语法也许可以被以下繁饰器处理:  [«_aux_lean_elaboration___elabRules_command#findCElab__1»]
 
 /-!
-TODO: Maybe we should also add a mini project that demonstrates a
-non # style command aka a declaration, although nothing comes to mind right now.
-TODO:  Define a `conjecture` declaration, similar to `lemma/theorem`, except that
-it is automatically sorried.  The `sorry` could be a custom one, to reflect that
-the "conjecture" might be expected to be true.
+TODO：也许我们还应该添加一个小型项目来演示非 `#` 风格的命令，即声明类命令，尽管目前没有想到什么。
+TODO：定义一个 `conjecture` 声明，类似于 `lemma/theorem`，不同之处在于它会自动补充 `sorry`。该 `sorry` 可以是一个自定义的，以反映 `conjecture` 可能被期望为真。
 -/
 
 /-!
-## Term elaboration
-A term is a `Syntax` object that represents some sort of `Expr`.
-Term elaborators are the ones that do the work for most of the code we write.
-Most notably they elaborate all the values of things like definitions,
-types (since these are also just `Expr`) etc.
+## 项繁饰
 
-All terms live in the `term` syntax category (which we have seen in action
-in the macro chapter already). So, in order to declare custom terms, their
-syntax needs to be registered in that category.
+一个项（term）是一个表示某种 `Expr` 的 `Syntax` 对象。项繁饰器是处理我们编写的大部分代码的核心。尤其是，它们负责繁饰定义的值、类型（因为这些也只是 `Expr`）等。
 
-### Giving meaning to terms
-As with command elaboration, the next step is giving some semantics to the syntax.
-With terms, this is done by registering a so called term elaborator.
+所有的项都属于 `term` 语法类别（我们在宏章节中已经看到它的作用）。因此，要声明自定义的项，它们的语法需要在该类别中注册。
 
-Term elaborators have type `TermElab` which is an alias for:
-`Syntax → Option Expr → TermElabM Expr`. This type is already
-quite different from command elaboration:
-- As with command elaboration the `Syntax` is whatever the user used
-  to create this term
-- The `Option Expr` is the expected type of the term, since this cannot
-  always be known it is only an `Option` argument
-- Unlike command elaboration, term elaboration is not only executed
-  because of its side effects -- the `TermElabM Expr` return value does
-  actually contain something of interest, namely, the `Expr` that represents
-  the `Syntax` object.
+### 为项赋予意义
 
-`TermElabM` is basically an upgrade of `CommandElabM` in every regard:
-it supports all the capabilities we mentioned above, plus two more.
-The first one is quite simple: On top of running `IO` code it is also
-capable of running `MetaM` code, so `Expr`s can be constructed nicely.
-The second one is very specific to the term elaboration loop.
+与命令繁饰一样，下一步是为语法赋予语义。对于项，这是通过注册一个所谓的项繁饰器完成的。
 
-### Term elaboration
-The basic idea of term elaboration is the same as command elaboration:
-expand macros and recurse or run term elaborators that have been registered
-for the `Syntax` via the `term_elab` attribute (they might in turn run term elaboration)
-until we are done. There is, however, one special action that a term elaborator
-can do during its execution.
+项繁饰器的类型是 `TermElab`，或者说 `Syntax → Option Expr → TermElabM Expr`：
+- 与命令繁饰一样，`Syntax` 是用户用于创建此项的内容
+- `Option Expr` 是该项的预期类型，由于这一点不总是已知，所以它只是一个 `Option` 参数
+- 不同于命令繁饰，项繁饰不仅仅是因为其副作用而执行——`TermElabM Expr` 的返回值确实包含感兴趣的内容，即表示 `Syntax` 对象的 `Expr`。
 
-A term elaborator may throw `Except.postpone`. This indicates that
-the term elaborator requires more
-information to continue its work. In order to represent this missing information,
-Lean uses so called synthetic metavariables. As you know from before, metavariables
-are holes in `Expr`s that are waiting to be filled in. Synthetic metavariables are
-different in that they have special methods that are used to solve them,
-registered in `SyntheticMVarKind`. Right now, there are four of these:
-- `typeClass`, the metavariable should be solved with typeclass synthesis
-- `coe`, the metavariable should be solved via coercion (a special case of typeclass)
-- `tactic`, the metavariable is a tactic term that should be solved by running a tactic
-- `postponed`, the ones that are created at `Except.postpone`
+`TermElabM` 在各个方面基本上都是 `CommandElabM` 的升级版：它支持我们之前提到的所有功能，再加上两项新功能。第一项非常简单：除了运行 `IO` 代码之外，它还可以运行 `MetaM` 代码，因此可以很好地构建 `Expr`。第二项功能非常专门，适用于项繁饰循环。
 
-Once such a synthetic metavariable is created, the next higher level term elaborator will continue.
-At some point, execution of postponed metavariables will be resumed by the term elaborator,
-in hopes that it can now complete its execution. We can try to see this in
-action with the following example:
+### 项繁饰
+
+项繁饰的基本思想与命令繁饰相同：展开宏并递归调用，或者运行通过 `term_elab` 属性为 `Syntax` 注册的项繁饰器（它们可能会进一步运行项繁饰），直到我们完成。不过，项繁饰器在执行过程中可以执行一项特殊的操作。
+
+项繁饰器可能会抛出 `Except.postpone`，表示它需要更多信息才能继续工作。为了表示这些缺失的信息，Lean 使用了所谓的合成元变量。正如你之前知道的，元变量是 `Expr` 中等待填补的空洞。合成元变量有所不同，它们具有特殊的方法来解决它们，这些方法注册在 `SyntheticMVarKind` 中。目前有四种：
+- `typeClass`，元变量应通过类型类推导解决
+- `coe`，元变量应通过类型转换（类型类的特殊情况）解决
+- `tactic`，元变量是一个策略项，应该通过运行策略解决
+- `postponed`，这些是在 `Except.postpone` 时创建的
+
+一旦创建了这样的合成元变量，下一个更高层级的项繁饰器将继续执行。在某些时刻，延迟的元变量的执行将由项繁饰器恢复，希望它现在能够完成其执行。我们可以通过以下示例来观察它的运行：
 -/
+
 #check set_option trace.Elab.postpone true in List.foldr .add 0 [1,2,3] -- [Elab.postpone] .add : ?m.5695 → ?m.5696 → ?m.5696
 
 /-!
-What happened here is that the elaborator for function applications started
-at `List.foldr` which is a generic function so it created metavariables
-for the implicit type parameters. Then, it attempted to elaborate the first argument `.add`.
+这里发生的事情是，函数应用的繁饰器从 `List.foldr` 开始展开。`List.foldr` 是一个通用函数，因此它为隐式类型参数创建了元变量。然后，它尝试繁饰第一个参数 `.add`。
 
-In case you don't know how `.name` works, the basic idea is that quite
-often (like in this case) Lean should be able to infer the output type (in this case `Nat`)
-of a function (in this case `Nat.add`).  In such cases, the `.name` feature will then simply
-search for a function named `name` in the namespace `Nat`. This is especially
-useful when you want to use constructors of a type without referring to its
-namespace or opening it, but can also be used like above.
+如果你不清楚 `.name` 的工作原理，基本想法是，Lean 通常可以推断出函数的输出类型（在这种情况下为 `Nat`，即 `Nat.add`）。在这种情况下，`.name` 特性会在 `Nat` 命名空间中查找一个名为 `name` 的函数。这在你希望使用某个类型的构造函数而不引用或打开其命名空间时特别有用，也可以像上面那样使用。
 
-Now back to our example, while Lean does at this point already know that `.add`
-needs to have type: `?m1 → ?m2 → ?m2` (where `?x` is notation for a metavariable)
-the elaborator for `.add` does need to know the actual value of `?m2` so the
-term elaborator postpones execution (by internally creating a synthetic metavariable
-in place of `.add`), the elaboration of the other two arguments then yields the fact that
-`?m2` has to be `Nat` so once the `.add` elaborator is continued it can work with
-this information to complete elaboration.
+回到我们的例子，虽然此时 Lean 已经知道 `.add` 需要的类型是：`?m1 → ?m2 → ?m2`（其中 `?x` 表示元变量），但 `.add` 的繁饰器需要知道 `?m2` 的实际值，因此项繁饰器推迟执行（通过内部创建一个合成元变量代替 `.add`），然后其他两个参数的繁饰结果表明 `?m2` 必须是 `Nat`。一旦 `.add` 的繁饰器继续执行，它就可以利用这些信息完成繁饰。
 
-We can also easily provoke cases where this does not work out. For example:
+我们也可以轻松引发无法正常工作的情况。例如：
 -/
 
 #check_failure set_option trace.Elab.postpone true in List.foldr .add
 -- [Elab.postpone] .add : ?m.5808 → ?m.5809 → ?m.5809
--- invalid dotted identifier notation, expected type is not of the form (... → C ...) where C is a constant
-  -- ?m.5808 → ?m.5809 → ?m.5809
+-- 无效的点号标识符表示法，预期类型不符合形式 (... → C ...) 其中 C 是一个常量 ?m.5808 → ?m.5809 → ?m.5809
 
 /-!
-In this case `.add` first postponed its execution, then got called again
-but didn't have enough information to finish elaboration and thus failed.
+在这种情况下，`.add` 首先推迟了执行，随后再次被调用，但没有足够的信息完成繁饰，因此失败了。
 
-### Making our own
-Adding new term elaborators works basically the same way as adding new
-command elaborators so we'll only take a very brief look:
+### 创建我们自己的项繁饰器
+
+添加新的项繁饰器的工作方式与添加新的命令繁饰器基本相同，因此我们只会简要地看一下：
 -/
 
 syntax (name := myterm1) "myterm 1" : term
@@ -284,20 +195,19 @@ def myTerm1Impl : TermElab := fun stx type? =>
 
 #eval myterm 1 -- 1
 
--- Also works with `elab`
+-- 用 `elab` 亦可
 elab "myterm 2" : term => do
   mkAppM ``List.get! #[.const ``mytermValues [], mkNatLit 1] -- `MetaM` code
 
 #eval myterm 2 -- 2
 
 /-!
-### Mini project
-As a final mini project for this chapter we will recreate one of the most
-commonly used Lean syntax sugars, the `⟨a,b,c⟩` notation as a short hand
-for single constructor types:
+### 项目示例
+
+作为本章的最终小型项目，我们将重现 Lean 中最常用的语法糖之一，即 `⟨a, b, c⟩` 表示法，用作单构造器类型的简写：
 -/
 
--- slightly different notation so no ambiguity happens
+-- 使用稍微不同的表示法，以避免歧义
 syntax (name := myanon) "⟨⟨" term,* "⟩⟩" : term
 
 def getCtors (typ : Name) : MetaM (List Name) := do
@@ -309,15 +219,13 @@ def getCtors (typ : Name) : MetaM (List Name) := do
 
 @[term_elab myanon]
 def myanonImpl : TermElab := fun stx typ? => do
-  -- Attempt to postpone execution if the type is not known or is a metavariable.
-  -- Metavariables are used by things like the function elaborator to fill
-  -- out the values of implicit parameters when they haven't gained enough
-  -- information to figure them out yet.
-  -- Term elaborators can only postpone execution once, so the elaborator
-  -- doesn't end up in an infinite loop. Hence, we only try to postpone it,
-  -- otherwise we may cause an error.
+  -- 如果类型未知或是元变量，尝试推迟执行。
+  -- 元变量被诸如函数繁饰器等用来填充隐式参数的值，
+  -- 当它们尚未获得足够的信息来确定这些值时。
+  -- 项繁饰器只能推迟执行一次，以避免陷入无限循环。
+  -- 因此，我们只尝试推迟执行，否则可能会导致错误。
   tryPostponeIfNoneOrMVar typ?
-  -- If we haven't found the type after postponing just error
+  -- 如果推迟后还没有找到类型，则报错
   let some typ := typ? | throwError "expected type must be known"
   if typ.isMVar then
     throwError "expected type must be known"
@@ -333,20 +241,20 @@ def myanonImpl : TermElab := fun stx typ? => do
 #check_failure (⟨⟨⟩⟩ : Nat → Nat) -- type is not of the expected form: Nat -> Nat
 
 /-!
+最后， 我们可以通过使用 `elab` 语法的额外语法糖来缩短推迟操作：
 As a final note, we can shorten the postponing act by using an additional
 syntax sugar of the `elab` syntax instead:
 -/
 
--- This `t` syntax will effectively perform the first two lines of `myanonImpl`
+-- 这个 `t` 语法将有效地执行 `myanonImpl` 的前两行
 elab "⟨⟨" args:term,* "⟩⟩" : term <= t => do
   sorry
 
 
 /-!
+## 练习
 
-## Exercises
-
-1. Consider the following code. Rewrite `syntax` + `@[term_elab hi]... : TermElab` combination using just `elab`.
+1. 考虑以下代码。使用 `elab` 重写 `syntax` + `@[term_elab hi]... : TermElab` 组合。
 
     ```lean
     syntax (name := hi) term " ♥ " " ♥ "? " ♥ "? : term
@@ -367,33 +275,33 @@ elab "⟨⟨" args:term,* "⟩⟩" : term <= t => do
           throwUnsupportedSyntax
     ```
 
-2. Here is some syntax taken from a real mathlib command `alias`.
+2. 以下是从真实的 mathlib 命令 `alias` 中提取的语法。
 
     ```
     syntax (name := our_alias) (docComment)? "our_alias " ident " ← " ident* : command
     ```
 
-    We want `alias hi ← hello yes` to print out the identifiers after `←` - that is, "hello" and "yes".
+    我们希望 `alias hi ← hello yes` 输出 `←` 之后的标识符，也就是 "hello" 和 "yes"。
 
-    Please add these semantics:
+    请添加以下语义：
 
-    **a)** using `syntax` + `@[command_elab alias] def elabOurAlias : CommandElab`.
-    **b)** using `syntax` + `elab_rules`.
-    **c)** using `elab`.
+    **a)** 使用 `syntax` + `@[command_elab alias] def elabOurAlias : CommandElab`。
+    **b)** 使用 `syntax` + `elab_rules`。
+    **c)** 使用 `elab`。
 
-3. Here is some syntax taken from a real mathlib tactic `nth_rewrite`.
+3. 以下是从真实的 mathlib 策略 `nth_rewrite` 中提取的语法。
 
     ```lean
     open Parser.Tactic
     syntax (name := nthRewriteSeq) "nth_rewrite " (config)? num rwRuleSeq (ppSpace location)? : tactic
     ```
 
-    We want `nth_rewrite 5 [←add_zero a] at h` to print out `"rewrite location!"` if the user provided location, and `"rewrite target!"` if the user didn't provide location.
+    我们希望 `nth_rewrite 5 [←add_zero a] at h` 在用户提供位置时输出 `"rewrite location!"`，如果用户没有提供位置，则输出 `"rewrite target!"`。
 
-    Please add these semantics:
+    请添加以下语义：
 
-    **a)** using `syntax` + `@[tactic nthRewrite] def elabNthRewrite : Lean.Elab.Tactic.Tactic`.
-    **b)** using `syntax` + `elab_rules`.
-    **c)** using `elab`.
+    **a)** 使用 `syntax` + `@[tactic nthRewrite] def elabNthRewrite : Lean.Elab.Tactic.Tactic`。
+    **b)** 使用 `syntax` + `elab_rules`。
+    **c)** 使用 `elab`。
 
 -/
