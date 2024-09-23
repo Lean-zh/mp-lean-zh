@@ -57,7 +57,7 @@ let goal_type ← goal.getType
 * 抛出错误信息：`Lean.Meta.throwTacticEx name mvar message_data`
   其中，`name : Lean.Name` 是策略名，`mvar` 包含错误信息
 
-  用法：`Lean.Meta.throwTacticEx `tac goal (m!"unable to find matching hypothesis of type ({goal_type})")`
+  用法：`Lean.Meta.throwTacticEx` tac goal (m!"unable to find matching hypothesis of type ({goal_type})")`
   其中，`m!` 格式化用于构建 `MessageData`，以便更好地打印项。
 
 TODO: Add?

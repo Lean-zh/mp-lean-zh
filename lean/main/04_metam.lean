@@ -294,7 +294,7 @@ def myAssumption (mvarId : MVarId) : MetaM Bool := do
 
 ### 元变量深度
 
-元变量深度也是一个较为小众的特性，但有时会派上用场。每个元变量都有一个*深度*（一个自然数），并且 `MetavarContext` 也有一个相应的深度。Lean 只有在元变量的深度等于当前 `MetavarContext` 的深度时才会为其赋值。新创建的元变量继承 `MetavarContext` 的深度，因此默认情况下，每个元变量都是可赋值的。
+元变量深度也是一个较为小众的特性，但有时会派上用场。每个元变量都有一个**深度**（一个自然数），并且 `MetavarContext` 也有一个相应的深度。Lean 只有在元变量的深度等于当前 `MetavarContext` 的深度时才会为其赋值。新创建的元变量继承 `MetavarContext` 的深度，因此默认情况下，每个元变量都是可赋值的。
 
 这种机制在某些策略需要一些临时元变量，并且需要确保其他非临时元变量不会被赋值时会很有用。为了实现这一点，策略可以按照以下步骤进行：
 
@@ -305,57 +305,21 @@ def myAssumption (mvarId : MVarId) : MetaM Bool := do
 
 这种模式封装在 `Lean.Meta.withNewMCtxDepth` 中。
 
-### Metavariable Depth
+## 计算
 
-Metavariable depth is also a niche feature, but one that is occasionally useful.
-Any metavariable has a *depth* (a natural number), and a `MetavarContext` has a
-corresponding depth as well. Lean only assigns a metavariable if its depth is
-equal to the depth of the current `MetavarContext`. Newly created metavariables
-inherit the `MetavarContext`'s depth, so by default every metavariable is
-assignable.
+计算是依值类型理论的核心概念。项 `2`、`Nat.succ 1` 和 `1 + 1` 在计算出相同值的意义上是等价的。我们称它们为**定义等价**。从元编程的角度来看，问题在于定义等价的项可能由完全不同的表达式表示，但我们的用户通常期望适用于 `2` 的策略也适用于 `1 + 1`。因此，当我们编写策略时，必须做额外的工作，以确保定义等价的项得到类似的处理。
 
-This setup can be used when a tactic needs some temporary metavariables and also
-needs to make sure that other, non-temporary metavariables will not be assigned.
-To ensure this, the tactic proceeds as follows:
+### 完全标准化
 
-1. Save the current `MetavarContext`.
-2. Increase the depth of the `MetavarContext`.
-3. Perform whatever computation is necessary, possibly creating and assigning
-   metavariables. Newly created metavariables are at the current depth of the
-   `MetavarContext` and so can be assigned. Old metavariables are at a lower
-   depth, so cannot be assigned.
-4. Restore the saved `MetavarContext`, thereby erasing all the temporary
-   metavariables and resetting the `MetavarContext` depth.
+我们能对计算做的最简单的事情就是将项标准化。对于某些数字类型的例外情况，类型为 `T` 的项 `t` 的标准式是 `T` 构造函数的应用序列。例如，列表的标准式是 `List.cons` 和 `List.nil` 的应用序列。
 
-This pattern is encapsulated in `Lean.Meta.withNewMCtxDepth`.
-
-
-## Computation
-
-Computation is a core concept of dependent type theory. The terms `2`, `Nat.succ
-1` and `1 + 1` are all "the same" in the sense that they compute the same value.
-We call them *definitionally equal*. The problem with this, from a
-metaprogramming perspective, is that definitionally equal terms may be
-represented by entirely different expressions, but our users would usually
-expect that a tactic which works for `2` also works for `1 + 1`. So when we
-write our tactics, we must do additional work to ensure that definitionally
-equal terms are treated similarly.
-
-### Full Normalisation
-
-The simplest thing we can do with computation is to bring a term into normal
-form. With some exceptions for numeric types, the normal form of a term `t` of
-type `T` is a sequence of applications of `T`'s constructors. E.g. the normal
-form of a list is a sequence of applications of `List.cons` and `List.nil`.
-
-The function that normalises a term (i.e. brings it into normal form) is
-`Lean.Meta.reduce` with type signature
+将项标准化（即将其带入标准式）的函数是 `Lean.Meta.reduce`，其类型签名为：
 
 ```lean
 reduce (e : Expr) (explicitOnly skipTypes skipProofs := true) : MetaM Expr
 ```
 
-We can use it like this:
+我们可以这样使用它：
 -/
 
 def someNumber : Nat := (· + 2) $ 3
@@ -367,18 +331,11 @@ def someNumber : Nat := (· + 2) $ 3
 -- Lean.Expr.lit (Lean.Literal.natVal 5)
 
 /-!
-Incidentally, this shows that the normal form of a term of type `Nat` is not
-always an application of the constructors of `Nat`; it can also be a literal.
-Also note that `#eval` can be used not only to evaluate a term, but also to
-execute a `MetaM` program.
+顺便说一下，这表明类型为 `Nat` 的项的标准式并不总是 `Nat` 构造函数的应用，它也可以是一个字面量。此外，注意 `#eval` 不仅可以用于计算项，还可以用于执行 `MetaM` 程序。
 
-The optional arguments of `reduce` allow us to skip certain parts of an
-expression. E.g. `reduce e (explicitOnly := true)` does not normalise any
-implicit arguments in the expression `e`. This yields better performance: since
-normal forms can be very big, it may be a good idea to skip parts of an
-expression that the user is not going to see anyway.
+`reduce` 的可选填参数允许我们跳过表达式的某些部分。例如，`reduce e (explicitOnly := true)` 不会归一化表达式 `e` 中的任何隐式参数。这可以带来更好的性能：由于标准式可能非常庞大，跳过用户无须看到的表达式部分可能是个好主意。
 
-The `#reduce` command is essentially an application of `reduce`:
+`#reduce` 命令本质上就是 `reduce` 的一个应用：
 -/
 
 #reduce someNumber
