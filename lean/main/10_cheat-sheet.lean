@@ -1,64 +1,64 @@
 /-
-#  Lean4 Cheat-sheet
+#  Lean4 速查表
 
-##  Extracting information
+## 读取信息
 
-* Extract the goal: `Lean.Elab.Tactic.getMainGoal`
+* 读取目标：`Lean.Elab.Tactic.getMainGoal`
 
-  Use as `let goal ← Lean.Elab.Tactic.getMainGoal`
-* Extract the declaration out of a metavariable: `mvarId.getDecl`
-  when `mvarId : Lean.MVarId` is in context.
-  For instance, `mvarId` could be the goal extracted using `getMainGoal`
-* Extract the type of a metavariable: `mvarId.getType`
-  when `mvarId : Lean.MVarId` is in context.
-* Extract the type of the main goal: `Lean.Elab.Tactic.getMainTarget`
+  用法：`let goal ← Lean.Elab.Tactic.getMainGoal`
+* 读取元变量外声明：`mvarId.getDecl`
+  当 `mvarId : Lean.MVarId` 在语境中
+  例如，`mvarId` 可以是被 `getMainGoal` 读取到的目标。
+* 读取元变量的类型：`mvarId.getType`
+  当 `mvarId : Lean.MVarId` 在语境中
+* 读取主目标的类型：`Lean.Elab.Tactic.getMainTarget`
 
-  Use as `let goal_type ← Lean.Elab.Tactic.getMainTarget`
+  用法： `let goal_type ← Lean.Elab.Tactic.getMainTarget`
 
-  Achieves the same as 
+  等价实现：
 ```lean
 let goal ← Lean.Elab.Tactic.getMainGoal
 let goal_type ← goal.getType
 ```
-* Extract local context: `Lean.MonadLCtx.getLCtx`
+* 读取局部语境：`Lean.MonadLCtx.getLCtx`
 
-  Use as `let lctx ← Lean.MonadLCtx.getLCtx`
-* Extract the name of a declaration: `Lean.LocalDecl.userName ldecl`
-  when `ldecl : Lean.LocalDecl` is in context
-* Extract the type of an expression: `Lean.Meta.inferType expr`
-  when `expr : Lean.Expr` is an expression in context
+  用法：`let lctx ← Lean.MonadLCtx.getLCtx`
+* 读取声明的名称：`Lean.LocalDecl.userName ldecl`
+  当 `ldecl : Lean.LocalDecl` 在语境中
+* 读取表达式的类型 `Lean.Meta.inferType expr`
+  当 `expr : Lean.Expr` 是语境中的表达式
 
-  Use as `let expr_type ← Lean.Meta.inferType expr`
+  用法：`let expr_type ← Lean.Meta.inferType expr`
 
-##  Playing around with expressions
+##  操纵表达式
 
-* Convert a declaration into an expression: `Lean.LocalDecl.toExpr`
-  
-  Use as `ldecl.toExpr`, when `ldecl : Lean.LocalDecl` is in context
-  
-  For instance, `ldecl` could be `let ldecl ← Lean.MonadLCtx.getLCtx`
-* Check whether two expressions are definitionally equal: `Lean.Meta.isDefEq ex1 ex2`
-  when `ex1 ex2 : Lean.Expr` are in context. Returns a `Lean.MetaM Bool`
-* Close a goal: `Lean.Elab.Tactic.closeMainGoal expr`
-  when `expr : Lean.Expr` is in context
+* 把声明转换为表达式：`Lean.LocalDecl.toExpr`
 
-##  Further commands
+  用法：`ldecl.toExpr`，当 `ldecl : Lean.LocalDecl` 在语境中
 
-* meta-sorry: `Lean.Elab.admitGoal goal`, when `goal : Lean.MVarId` is the current goal
+  例如，`ldecl` 可以是 `let ldecl ← Lean.MonadLCtx.getLCtx`
+* 检查两个表达式是否定义等价：`Lean.Meta.isDefEq ex1 ex2`
+  当 `ex1 ex2 : Lean.Expr` 在语境中。返回一个 `Lean.MetaM Bool`
+* 选择一个目标：`Lean.Elab.Tactic.closeMainGoal expr`
+  当 `expr : Lean.Expr` 在语境中
 
-##  Printing and errors
+## 更多命令
 
-* Print a "permanent" message in normal usage:
+* meta-sorry: `Lean.Elab.admitGoal goal`，当 `goal : Lean.MVarId` 是当前目标
+
+## 打印和显示报错
+
+* 打印一句话：
 
   `Lean.logInfo f!"Hi, I will print\n{Syntax}"`
-* Print a message while debugging:
+* 调试时打印：
 
   `dbg_trace f!"1) goal: {Syntax_that_will_be_interpreted}"`.
-* Throw an error: `Lean.Meta.throwTacticEx name mvar message_data`
-  where `name : Lean.Name` is the name of a tactic and `mvar` contains error data.
-  
-  Use as `Lean.Meta.throwTacticEx `tac goal (m!"unable to find matching hypothesis of type ({goal_type})")`
-  where the `m!` formatting builds a `MessageData` for better printing of terms
+* 抛出错误信息：`Lean.Meta.throwTacticEx name mvar message_data`
+  其中，`name : Lean.Name` 是策略名，`mvar` 包含错误信息
+
+  用法：`Lean.Meta.throwTacticEx `tac goal (m!"unable to find matching hypothesis of type ({goal_type})")`
+  其中，`m!` 格式化用于构建 `MessageData`，以便更好地打印项。
 
 TODO: Add?
 * Lean.LocalContext.forM

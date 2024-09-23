@@ -24,24 +24,21 @@ example : 1 = 42 := by
   custom_sorry_macro
 
 /-
-### Implementing `trivial`: Extensible Tactics by Macro Expansion
+### 实现 `trivial`：通过宏扩展实现可扩展的策略
 
-As more complex examples, we can write a tactic such as `custom_tactic`, which
-is initially completely unimplemented, and can be extended with more tactics.
-We start by simply declaring the tactic with no implementation:
+作为更复杂的示例，我们可以编写一个类似 `custom_tactic` 的策略，该策略最初完全未实现，并且可以通过添加更多策略来扩展。我们首先简单地声明这个策略，而不提供任何实现：
 -/
 
 syntax "custom_tactic" : tactic
 
-/-- error: tactic 'tacticCustom_tactic' has not been implemented -/
+/-- 错误：策略 'tacticCustom_tactic' 尚未实现 -/
 #guard_msgs in --#
 example : 42 = 42 := by
   custom_tactic
   sorry
 
 /-
-We will now add the `rfl` tactic into `custom_tactic`, which will allow us to
-prove the previous theorem
+接下来我们将在 `custom_tactic` 中添加 `rfl` 策略，这将允许我们证明前面的定理。
 -/
 
 macro_rules
@@ -52,7 +49,7 @@ example : 42 = 42 := by
 -- Goals accomplished 🎉
 
 /-
-We can now try a harder problem, that cannot be immediately dispatched by `rfl`:
+测试一个稍难的例子，它不能直接被 `rfl` 证明：
 -/
 
 #check_failure (by custom_tactic : 43 = 43 ∧ 42 = 42)
@@ -64,21 +61,14 @@ We can now try a harder problem, that cannot be immediately dispatched by `rfl`:
 --   43 = 43 ∧ 42 = 42 : Prop
 
 /-
-We extend the `custom_tactic` tactic with a tactic that tries to break `And`
-down with `apply And.intro`, and then (recursively (!)) applies `custom_tactic`
-to the two cases with `(<;> trivial)` to solve the generated subcases `43 = 43`,
-`42 = 42`.
+我们通过一个策略扩展 `custom_tactic`，该策略尝试使用 `apply And.intro` 分解 `And`，然后递归地对两个子情况应用 `custom_tactic`，并使用 `(<;> trivial)` 解决生成的子问题 `43 = 43` 和 `42 = 42`。
 -/
 
 macro_rules
 | `(tactic| custom_tactic) => `(tactic| apply And.intro <;> custom_tactic)
 
 /-
-The above declaration uses `<;>` which is a *tactic combinator*. Here, `a <;> b`
-means "run tactic `a`, and apply "b" to each goal produced by `a`". Thus,
-`And.intro <;> custom_tactic` means "run `And.intro`, and then run
-`custom_tactic` on each goal". We test it out on our previous theorem and see
-that we dispatch the theorem.
+上面的声明使用了 `<;>`，这是一种**策略组合器**（tactic combinator）。这里，`a <;> b` 的意思是「运行策略 `a`，并对 `a` 生成的每个目标应用 `b`」。因此，`And.intro <;> custom_tactic` 的意思是「运行 `And.intro`，然后在每个目标上运行 `custom_tactic`」。我们在前面的定理上测试它，并发现我们能够证明该定理。
 -/
 
 example : 43 = 43 ∧ 42 = 42 := by
@@ -86,31 +76,22 @@ example : 43 = 43 ∧ 42 = 42 := by
 -- Goals accomplished 🎉
 
 /-
-In summary, we declared an extensible tactic called `custom_tactic`. It
-initially had no elaboration at all. We added the `rfl` as an elaboration of
-`custom_tactic`, which allowed it to solve the goal `42 = 42`. We then tried a
-harder theorem, `43 = 43 ∧ 42 = 42` which `custom_tactic` was unable to solve.
-We were then able to enrich `custom_tactic` to split "and" with `And.intro`, and
-also *recursively* call `custom_tactic` in the two subcases.
+总结一下，我们声明了一个可扩展的策略，名为 `custom_tactic`。最初，它完全没有任何实现。我们将 `rfl` 作为 `custom_tactic` 的一个实现，这使它能够解决目标 `42 = 42`。然后我们尝试了一个更难的定理 `43 = 43 ∧ 42 = 42`，而 `custom_tactic` 无法解决。随后我们丰富了 `custom_tactic`，使其能够通过 `And.intro` 分解「AND」，并且在两个子情况下递归调用 `custom_tactic`。
 
-### Implementing `<;>`: Tactic Combinators by Macro Expansion
+### 实现 `<;>`：通过宏扩展实现策略组合器
 
-Recall that in the previous section, we said that `a <;> b` meant "run `a`, and
-then run `b` for all goals". In fact, `<;>` itself is a tactic macro. In this
-section, we will implement the syntax `a and_then b` which will stand for
-"run `a`, and then run `b` for all goals".
+在上一节中，我们提到 `a <;> b` 意味着「运行 `a`，然后对所有生成的目标运行 `b`」。实际上，`<;>` 本身是一个策略宏。在本节中，我们将实现 `a and_then b` 语法，它代表「运行 `a`，然后对所有目标运行 `b`」。
 -/
 
--- 1. We declare the syntax `and_then`
+-- 1. 我们声明语法 `and_then`
 syntax tactic " and_then " tactic : tactic
 
--- 2. We write the expander that expands the tactic
---    into running `a`, and then running `b` on all goals produced by `a`.
+-- 2. 我们编写扩展器，将策略扩展为运行 `a`，然后对 `a` 生成的所有目标运行 `b`。
 macro_rules
 | `(tactic| $a:tactic and_then $b:tactic) =>
     `(tactic| $a:tactic; all_goals $b:tactic)
 
--- 3. We test this tactic.
+-- 3. 我们测试这个策略。
 theorem test_and_then: 1 = 1 ∧ 2 = 2 := by
   apply And.intro and_then rfl
 
@@ -119,18 +100,18 @@ theorem test_and_then: 1 = 1 ∧ 2 = 2 := by
 -- { left := Eq.refl 1, right := Eq.refl 2 }
 
 /-
-## Exploring `TacticM`
+## 探索 `TacticM`
 
-### The simplest tactic: `sorry`
+### 最简单的策略：`sorry`
 
-In this section, we wish to write a tactic that fills the proof with sorry:
+本节我们实现sorry：
 
 ```lean
 example : 1 = 2 := by
   custom_sorry
 ```
 
-We begin by declaring such a tactic:
+从声明策略开始：
 -/
 
 elab "custom_sorry_0" : tactic => do
@@ -142,21 +123,11 @@ example : 1 = 2 := by
   sorry
 
 /-
-This defines a syntax extension to Lean, where we are naming the piece of syntax
-`custom_sorry_0` as living in `tactic` syntax category. This informs the
-elaborator that, in the context of elaborating `tactic`s, the piece of syntax
-`custom_sorry_0` must be elaborated as what we write to the right-hand-side of
-the `=>` (the actual implementation of the tactic).
+这定义了一个 Lean 的语法扩展，我们将这个语法片段命名为 `custom_sorry_0`，属于 `tactic` 语法类别。这告诉繁饰器，在繁饰 `tactic` 时，`custom_sorry_0` 语法片段必须按照我们在 `=>` 右侧编写的内容进行繁饰（也就是策略的实际实现）。
 
-Next, we write a term in `TacticM Unit` to fill in the goal with `sorryAx α`,
-which can synthesize an artificial term of type `α`. To do this, we first access
-the goal with `Lean.Elab.Tactic.getMainGoal : Tactic MVarId`, which returns the
-main goal, represented as a metavariable. Recall that under
-types-as-propositions, the type of our goal must be the proposition that `1 = 2`.
-We check this by printing the type of `goal`.
+接下来，我们编写一个 `TacticM Unit` 类型的项，用 `sorryAx α` 填充目标，它可以生成一个类型为 `α` 的人工项。为此，我们首先使用 `Lean.Elab.Tactic.getMainGoal : Tactic MVarId` 获取目标，它返回一个表示为元变量的主目标。回顾类型即命题的原理，我们的目标类型必须是命题 `1 = 2`。我们通过打印 `goal` 的类型来验证这一点。
 
-But first we need to start our tactic with `Lean.Elab.Tactic.withMainContext`,
-which computes in `TacticM` with an updated context.
+但首先，我们需要使用 `Lean.Elab.Tactic.withMainContext` 开始我们的策略，它在更新后的语境中计算 `TacticM`。
 -/
 
 elab "custom_sorry_1" : tactic =>
@@ -173,7 +144,7 @@ example : 1 = 2 := by
   sorry
 
 /-
-To `sorry` the goal, we can use the helper `Lean.Elab.admitGoal`:
+为了 `sorry` 这个目标，我们可以用 `Lean.Elab.admitGoal`：
 -/
 
 elab "custom_sorry_2" : tactic =>
@@ -189,17 +160,13 @@ theorem test_custom_sorry : 1 = 2 := by
 -- sorryAx (1 = 2) true
 
 /-
-And we no longer have the error `unsolved goals: ⊢ 1 = 2`.
+我们不再出现错误 `unsolved goals: ⊢ 1 = 2`。
 
-### The `custom_assump` tactic: Accessing Hypotheses
+### `custom_assump` 策略：访问假设
 
-In this section, we will learn how to access the hypotheses to prove a goal. In
-particular, we shall attempt to implement a tactic `custom_assump`, which looks
-for an exact match of the goal among the hypotheses, and solves the theorem if
-possible.
+在本节中，我们将学习如何访问假设来证明目标。特别是，我们将尝试实现一个策略 `custom_assump`，它会在假设中寻找与目标完全匹配的项，并在可能的情况下解决定理。
 
-In the example below, we expect `custom_assump` to use `(H2 : 2 = 2)` to solve
-the goal `(2 = 2)`:
+在下面的例子中，我们期望 `custom_assump` 使用 `(H2 : 2 = 2)` 来解决目标 `(2 = 2)`：
 
 ```lean
 theorem assump_correct (H1 : 1 = 1) (H2 : 2 = 2) : 2 = 2 := by
@@ -210,23 +177,20 @@ theorem assump_correct (H1 : 1 = 1) (H2 : 2 = 2) : 2 = 2 := by
 -- fun H1 H2 => H2
 ```
 
-When we do not have a matching hypothesis to the goal, we expect the tactic
-`custom_assump` to throw an error, telling us that we cannot find a hypothesis
-of the type we are looking for:
+当我们没有与目标匹配的假设时，我们期望 `custom_assump` 策略抛出一个错误，告知我们找不到我们正在寻找类型的假设：
 
 ```lean
 theorem assump_wrong (H1 : 1 = 1) : 2 = 2 := by
   custom_assump
 
 #print assump_wrong
+-- 策略 'custom_assump' 失败，找不到类型 (2 = 2) 的匹配假设
 -- tactic 'custom_assump' failed, unable to find matching hypothesis of type (2 = 2)
 -- H1 : 1 = 1
 -- ⊢ 2 = 2
 ```
 
-We begin by accessing the goal and the type of the goal so we know what we
-are trying to prove. The `goal` variable will soon be used to help us create
-error messages.
+我们首先通过访问目标及其类型，来了解我们正在试图证明什么。`goal` 变量很快将被用于帮助我们创建错误信息。
 -/
 
 elab "custom_assump_0" : tactic =>
@@ -252,20 +216,15 @@ example (H1 : 1 = 1): 2 = 2 := by
   sorry
 
 /-
-Next, we access the list of hypotheses, which are stored in a data structure
-called `LocalContext`. This is accessed via `Lean.MonadLCtx.getLCtx`. The
-`LocalContext` contains `LocalDeclaration`s, from which we can extract
-information such as the name that is given to declarations (`.userName`), the
-expression of the declaration (`.toExpr`). Let's write a tactic called
-`list_local_decls` that prints the local declarations:
+接下来，我们访问存储在名为 `LocalContext` 的数据结构中的假设列表。可以通过 `Lean.MonadLCtx.getLCtx` 访问它。`LocalContext` 包含 `LocalDeclaration`，我们可以从中提取信息，如声明的名称（`.userName`）和声明的表达式（`.toExpr`）。让我们编写一个名为 `list_local_decls` 的策略，打印出局部声明：
 -/
 
 elab "list_local_decls_1" : tactic =>
   Lean.Elab.Tactic.withMainContext do
-    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+    let ctx ← Lean.MonadLCtx.getLCtx -- 获取局部语境
     ctx.forM fun decl: Lean.LocalDecl => do
-      let declExpr := decl.toExpr -- Find the expression of the declaration.
-      let declName := decl.userName -- Find the name of the declaration.
+      let declExpr := decl.toExpr -- 找到声明的表达式
+      let declName := decl.userName -- 找到声明的名称
       dbg_trace f!"+ local decl: name: {declName} | expr: {declExpr}"
 
 example (H1 : 1 = 1) (H2 : 2 = 2): 1 = 1 := by
@@ -276,18 +235,16 @@ example (H1 : 1 = 1) (H2 : 2 = 2): 1 = 1 := by
   rfl
 
 /-
-Recall that we are looking for a local declaration that has the same type as the
-hypothesis. We get the type of `LocalDecl` by calling
-`Lean.Meta.inferType` on the local declaration's expression.
+回想一下，我们正在寻找一个具有与假设相同类型的局部声明。我们可以通过在局部声明的表达式上调用 `Lean.Meta.inferType` 来获取 `LocalDecl` 的类型。
 -/
 
 elab "list_local_decls_2" : tactic =>
   Lean.Elab.Tactic.withMainContext do
-    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+    let ctx ← Lean.MonadLCtx.getLCtx -- 获取局部语境
     ctx.forM fun decl: Lean.LocalDecl => do
-      let declExpr := decl.toExpr -- Find the expression of the declaration.
-      let declName := decl.userName -- Find the name of the declaration.
-      let declType ← Lean.Meta.inferType declExpr -- **NEW:** Find the type.
+      let declExpr := decl.toExpr -- 找到声明的表达式
+      let declName := decl.userName -- 找到声明的名称
+      let declType ← Lean.Meta.inferType declExpr -- **新事件：** 找到类型
       dbg_trace f!"+ local decl: name: {declName} | expr: {declExpr} | type: {declType}"
 
 example (H1 : 1 = 1) (H2 : 2 = 2): 1 = 1 := by
@@ -298,22 +255,18 @@ example (H1 : 1 = 1) (H2 : 2 = 2): 1 = 1 := by
   rfl
 
 /-
-We check if the type of the `LocalDecl` is equal to the goal type with
-`Lean.Meta.isExprDefEq`. See that we check if the types are equal at `eq?`, and
-we print that `H1` has the same type as the goal
-(`local decl[EQUAL? true]: name: H1`), and we print that `H2` does not have the
-same type (`local decl[EQUAL? false]: name: H2 `):
+我们使用 `Lean.Meta.isExprDefEq` 检查 `LocalDecl` 的类型是否与目标类型相等。可以看到，我们在 `eq?` 处检查类型是否相等，并打印出 `H1` 与目标类型相同（`local decl[EQUAL? true]: name: H1`），同时我们也打印出 `H2` 的类型不相同（`local decl[EQUAL? false]: name: H2`）：
 -/
 
 elab "list_local_decls_3" : tactic =>
   Lean.Elab.Tactic.withMainContext do
     let goalType ← Lean.Elab.Tactic.getMainTarget
-    let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+    let ctx ← Lean.MonadLCtx.getLCtx -- 获取局部语境
     ctx.forM fun decl: Lean.LocalDecl => do
-      let declExpr := decl.toExpr -- Find the expression of the declaration.
-      let declName := decl.userName -- Find the name of the declaration.
-      let declType ← Lean.Meta.inferType declExpr -- Find the type.
-      let eq? ← Lean.Meta.isExprDefEq declType goalType -- **NEW** Check if type equals goal type.
+      let declExpr := decl.toExpr -- 找到声明的表达式
+      let declName := decl.userName -- 找到声明的名称
+      let declType ← Lean.Meta.inferType declExpr -- 找到类型
+      let eq? ← Lean.Meta.isExprDefEq declType goalType -- **新事件：** 检查是否与目标类型等价
       dbg_trace f!"+ local decl[EQUAL? {eq?}]: name: {declName}"
 
 example (H1 : 1 = 1) (H2 : 2 = 2): 1 = 1 := by
@@ -324,24 +277,20 @@ example (H1 : 1 = 1) (H2 : 2 = 2): 1 = 1 := by
   rfl
 
 /-
-Finally, we put all of these parts together to write a tactic that loops over
-all declarations and finds one with the correct type. We loop over declarations
-with `lctx.findDeclM?`. We infer the type of declarations with
-`Lean.Meta.inferType`. We check that the declaration has the same type as the
-goal with `Lean.Meta.isExprDefEq`:
+最后，我们将这些部分组合在一起，编写一个遍历所有声明并找到具有正确类型的声明的策略。我们使用 `lctx.findDeclM?` 遍历声明。使用 `Lean.Meta.inferType` 推断声明的类型。使用 `Lean.Meta.isExprDefEq` 检查声明的类型是否与目标相同：
 -/
 
 elab "custom_assump_1" : tactic =>
   Lean.Elab.Tactic.withMainContext do
     let goalType ← Lean.Elab.Tactic.getMainTarget
     let lctx ← Lean.MonadLCtx.getLCtx
-    -- Iterate over the local declarations...
+    -- 在局部证明中迭代...
     let option_matching_expr ← lctx.findDeclM? fun ldecl: Lean.LocalDecl => do
-      let declExpr := ldecl.toExpr -- Find the expression of the declaration.
-      let declType ← Lean.Meta.inferType declExpr -- Find the type.
-      if (← Lean.Meta.isExprDefEq declType goalType) -- Check if type equals goal type.
-      then return some declExpr -- If equal, success!
-      else return none          -- Not found.
+      let declExpr := ldecl.toExpr -- 找到声明的表达式
+      let declType ← Lean.Meta.inferType declExpr -- 找到类型
+      if (← Lean.Meta.isExprDefEq declType goalType) -- 检查是否与目标类型等价
+      then return some declExpr -- 如果等价，成功！
+      else return none          -- 未找到
     dbg_trace f!"matching_expr: {option_matching_expr}"
 
 example (H1 : 1 = 1) (H2 : 2 = 2) : 2 = 2 := by
@@ -355,17 +304,7 @@ example (H1 : 1 = 1) : 2 = 2 := by
   rfl
 
 /-
-Now that we are able to find the matching expression, we need to close the
-theorem by using the match. We do this with `Lean.Elab.Tactic.closeMainGoal`.
-When we do not have a matching expression, we throw an error with
-`Lean.Meta.throwTacticEx`, which allows us to report an error corresponding to a
-given goal. When throwing this error, we format the error using `m!"..."` which
-builds a `MessageData`. This provides nicer error messages than using `f!"..."`
-which builds a `Format`. This is because `MessageData` also runs *delaboration*,
-which allows it to convert raw Lean terms like
-`(Eq.{1} Nat (OfNat.ofNat.{0} Nat 2 (instOfNatNat 2)) (OfNat.ofNat.{0} Nat 2 (instOfNatNat 2)))`
-into readable strings like`(2 = 2)`. The full code listing given below shows how
-to do this:
+现在我们能够找到匹配的表达式，需要使用匹配来证成定理。我们通过 `Lean.Elab.Tactic.closeMainGoal` 来完成这一操作。如果没有找到匹配的表达式，我们会使用 `Lean.Meta.throwTacticEx` 抛出一个错误，允许我们针对给定的目标报告错误。在抛出此错误时，我们使用 `m!"..."` 来格式化错误信息，这会生成一个 `MessageData`。与生成 `Format` 的 `f!"..."` 相比，`MessageData` 提供了更友好的错误信息，这是因为 `MessageData` 还会运行**反繁饰**，使其能够将像 `(Eq.{1} Nat (OfNat.ofNat.{0} Nat 2 (instOfNatNat 2)) (OfNat.ofNat.{0} Nat 2 (instOfNatNat 2)))` 这样的原始 Lean 项转换为易读的字符串，例如 `(2 = 2)`。完整的代码示例如下：
 -/
 
 elab "custom_assump_2" : tactic =>
@@ -394,20 +333,13 @@ example (H1 : 1 = 1) (H2 : 2 = 2) : 2 = 2 := by
 -- ⊢ 2 = 2
 
 /-
-### Tweaking the context
+### 调整语境
 
-Until now, we've only performed read-like operations with the context. But what
-if we want to change it? In this section we will see how to change the order of
-goals and how to add content to it (new hypotheses).
+到目前为止，我们只对语境执行了类似读取的操作。但如果我们想要更改语境呢？在本节中，我们将看到如何更改目标的顺序以及如何向其添加内容（新的假设）。
 
-Then, after elaborating our terms, we will need to use the helper function
-`Lean.Elab.Tactic.liftMetaTactic`, which allows us to run computations in
-`MetaM` while also giving us the goal `MVarId` for us to play with. In the end
-of our computation, `liftMetaTactic` expects us to return a `List MVarId` as the
-resulting list of goals.
+然后，在繁饰我们的项之后，我们需要使用辅助函数 `Lean.Elab.Tactic.liftMetaTactic`，它允许我们在 `MetaM` 中运行计算，同时为我们提供目标 `MVarId` 以便操作。计算结束时，`liftMetaTactic` 期望我们返回一个 `List MVarId`，即目标列表的最终结果。
 
-The only substantial difference between `custom_let` and `custom_have` is that
-the former uses `Lean.MVarId.define` and the later uses `Lean.MVarId.assert`:
+`custom_let` 和 `custom_have` 的唯一实质性区别是前者使用了 `Lean.MVarId.define`，而后者使用了 `Lean.MVarId.assert`：
 -/
 
 open Lean.Elab.Tactic in
@@ -439,10 +371,9 @@ theorem test_faq_have : True := by
   trivial
 
 /-
-### "Getting" and "Setting" the list of goals
+### 「获取」和「设置」目标列表
 
-To illustrate these, let's build a tactic that can reverse the list of goals.
-We can use `Lean.Elab.Tactic.getGoals` and `Lean.Elab.Tactic.setGoals`:
+为了说明这些操作，我们将构建一个可以反转目标列表的策略。我们可以使用 `Lean.Elab.Tactic.getGoals` 和 `Lean.Elab.Tactic.setGoals`：
 -/
 
 elab "reverse_goals" : tactic =>
@@ -469,19 +400,17 @@ theorem test_reverse_goals : (1 = 2 ∧ 3 = 4) ∧ 5 = 6 := by
   all_goals sorry
 
 /-
-## FAQ
+## 常见问题
 
-In this section, we collect common patterns that are used during writing tactics,
-to make it easy to find common patterns.
+在本节中，我们收集了一些在编写策略时常用的模式，备查。
 
-**Q: How do I use goals?**
+**问题：如何使用目标？**
 
-A: Goals are represented as metavariables. The module `Lean.Elab.Tactic.Basic`
-has many functions to add new goals, switch goals, etc.
+回答：目标表示为元变量。模块 `Lean.Elab.Tactic.Basic` 提供了许多函数用于添加新目标、切换目标等。
 
-**Q: How do I get the main goal?**
+**问题：如何获取主要目标？**
 
-A: Use `Lean.Elab.Tactic.getMainGoal`.
+回答：使用 `Lean.Elab.Tactic.getMainGoal`。
 -/
 
 elab "faq_main_goal" : tactic =>
@@ -495,9 +424,9 @@ example : 1 = 1 := by
   rfl
 
 /-
-**Q: How do I get the list of goals?**
+**问题：如何获取目标列表？**
 
-A: Use `getGoals`.
+回答：使用 `getGoals`。
 -/
 
 elab "faq_get_goals" : tactic =>
@@ -516,21 +445,19 @@ example (b : Bool) : b = true := by
   rfl
 
 /-
-**Q: How do I get the current hypotheses for a goal?**
+**问题：如何获取目标的当前假设？**
 
-A: Use `Lean.MonadLCtx.getLCtx` which provides the local context, and then
-iterate on the `LocalDeclaration`s of the `LocalContext` with accessors such as
-`foldlM` and `forM`.
+回答：使用 `Lean.MonadLCtx.getLCtx` 获取局部语境，然后使用诸如 `foldlM` 和 `forM` 之类的访问器，遍历 `LocalContext` 中的 `LocalDeclaration`。
 -/
 
 elab "faq_get_hypotheses" : tactic =>
   Lean.Elab.Tactic.withMainContext do
-  let ctx ← Lean.MonadLCtx.getLCtx -- get the local context.
+  let ctx ← Lean.MonadLCtx.getLCtx -- 获取局部语境。
   ctx.forM (fun (decl : Lean.LocalDecl) => do
-    let declExpr := decl.toExpr -- Find the expression of the declaration.
-    let declType := decl.type -- Find the type of the declaration.
-    let declName := decl.userName -- Find the name of the declaration.
-    dbg_trace f!" local decl: name: {declName} | expr: {declExpr} | type: {declType}"
+    let declExpr := decl.toExpr -- 找到声明的表达式。
+    let declType := decl.type -- 找到声明的类型。
+    let declName := decl.userName -- 找到声明的名称。
+    dbg_trace f!"局部声明: 名称: {declName} | 表达式: {declExpr} | 类型: {declType}"
   )
 
 example (H1 : 1 = 1) (H2 : 2 = 2): 3 = 3 := by
@@ -541,30 +468,28 @@ example (H1 : 1 = 1) (H2 : 2 = 2): 3 = 3 := by
   rfl
 
 /-
-**Q: How do I evaluate a tactic?**
+**问题：如何执行一个策略？**
 
-A: Use `Lean.Elab.Tactic.evalTactic: Syntax → TacticM Unit` which evaluates a
-given tactic syntax. One can create tactic syntax using the macro
-`` `(tactic| ⋯)``.
+回答：使用 `Lean.Elab.Tactic.evalTactic: Syntax → TacticM Unit` 来执行给定的策略语法。可以使用宏 `` `(tactic| ⋯)`` 创建策略语法。
 
-For example, one could call `try rfl` with the piece of code:
+例如，可以使用以下代码调用 `try rfl`：
 
 ```lean
 Lean.Elab.Tactic.evalTactic (← `(tactic| try rfl))
 ```
 
-**Q: How do I check if two expressions are equal?**
+**问题：如何检查两个表达式是否相等？**
 
-A: Use `Lean.Meta.isExprDefEq <expr-1> <expr-2>`.
+回答：使用 `Lean.Meta.isExprDefEq <expr-1> <expr-2>`。
 -/
 
 #check Lean.Meta.isExprDefEq
 -- Lean.Meta.isExprDefEq : Lean.Expr → Lean.Expr → Lean.MetaM Bool
 
 /-
-**Q: How do I throw an error from a tactic?**
+**问题：如何从一个策略中抛出错误？**
 
-A: Use `throwTacticEx <tactic-name> <goal-mvar> <error>`.
+回答：使用 `throwTacticEx <tactic-name> <goal-mvar> <error>`。
 -/
 
 elab "faq_throw_error" : tactic =>
@@ -577,141 +502,140 @@ elab "faq_throw_error" : tactic =>
 -- ⊢ ∀ (b : Bool), b = true
 
 /-!
-**Q: What is the difference between `Lean.Elab.Tactic.*` and `Lean.Meta.Tactic.*`?**
+**问题：`Lean.Elab.Tactic.*` 和 `Lean.Meta.Tactic.*` 有什么区别？**
 
-A: `Lean.Meta.Tactic.*` contains low level code that uses the `Meta` monad to
-implement basic features such as rewriting. `Lean.Elab.Tactic.*` contains
-high-level code that connects the low level development in `Lean.Meta` to the
-tactic infrastructure and the parsing front-end.
+回答：`Lean.Meta.Tactic.*` 包含使用 `Meta` 单子实现的底层代码，用于提供诸如重写等基本功能。而 `Lean.Elab.Tactic.*` 包含连接 `Lean.Meta` 中的底层开发与策略基础设施及解析前端的高级代码。
 
-## Exercises
+## 练习
 
-1. Consider the theorem `p ∧ q ↔ q ∧ p`. We could either write its proof as a proof term, or construct it using the tactics.
-    When we are writing the proof of this theorem *as a proof term*, we're gradually filling up `_`s with certain expressions, step by step. Each such step corresponds to a tactic.
+1. 考虑定理 `p ∧ q ↔ q ∧ p`。我们可以将其证明写为一个证明项，或者使用策略构建它。
+   当我们将该定理的证明写成证明项时，我们会逐步用特定的表达式填充 `_`，一步一步进行。每一步都对应一个策略。
 
-    There are many combinations of steps in which we could write this proof term - but consider the sequence of steps we wrote below. Please write each step as a tactic.
-    The tactic `step_1` is filled in, please do the same for the remaining tactics (for the sake of the exercise, try to use lower-level apis, such as `mkFreshExprMVar`, `mvarId.assign` and `modify fun _ => { goals := ~)`.
+   我们可以通过多种步骤组合来编写这个证明项，但请考虑我们在下面编写的步骤序列。请将每一步写为策略。
+   策略 `step_1` 已经填写，请对其余策略执行相同操作（为了练习，请尝试使用较底层的 API，例如 `mkFreshExprMVar`、`mvarId.assign` 和 `modify fun _ => { goals := ~)`）。
 
-    ```lean
-    -- [this is the initial goal]
-    example : p ∧ q ↔ q ∧ p :=
-      _
+   ```lean
+   -- [这是初始目标]
+   example : p ∧ q ↔ q ∧ p :=
+     _
 
-    -- step_1
-    example : p ∧ q ↔ q ∧ p :=
-      Iff.intro _ _
+   -- step_1
+   example : p ∧ q ↔ q ∧ p :=
+     Iff.intro _ _
 
-    -- step_2
-    example : p ∧ q ↔ q ∧ p :=
-      Iff.intro
-        (
-          fun hA =>
-          _
-        )
-        (
-          fun hB =>
-          (And.intro hB.right hB.left)
-        )
+   -- step_2
+   example : p ∧ q ↔ q ∧ p :=
+     Iff.intro
+       (
+         fun hA =>
+         _
+       )
+       (
+         fun hB =>
+         (And.intro hB.right hB.left)
+       )
 
-    -- step_3
-    example : p ∧ q ↔ q ∧ p :=
-      Iff.intro
-        (
-          fun hA =>
-          (And.intro _ _)
-        )
-        (
-          fun hB =>
-          (And.intro hB.right hB.left)
-        )
+   -- step_3
+   example : p ∧ q ↔ q ∧ p :=
+     Iff.intro
+       (
+         fun hA =>
+         (And.intro _ _)
+       )
+       (
+         fun hB =>
+         (And.intro hB.right hB.left)
+       )
 
-    -- step_4
-    example : p ∧ q ↔ q ∧ p :=
-      Iff.intro
-        (
-          fun hA =>
-          (And.intro hA.right hA.left)
-        )
-        (
-          fun hB =>
-          (And.intro hB.right hB.left)
-        )
-    ```
+   -- step_4
+   example : p ∧ q ↔ q ∧ p :=
+     Iff.intro
+       (
+         fun hA =>
+         (And.intro hA.right hA.left)
+       )
+       (
+         fun hB =>
+         (And.intro hB.right hB.left)
+       )
+   ```
 
-    ```lean
-    elab "step_1" : tactic => do
-      let mvarId ← getMainGoal
-      let goalType ← getMainTarget
+   ```lean
+   elab "step_1" : tactic => do
+     let mvarId ← getMainGoal
+     let goalType ← getMainTarget
 
-      let Expr.app (Expr.app (Expr.const `Iff _) a) b := goalType | throwError "Goal type is not of the form `a ↔ b`"
+     let Expr.app (Expr.app (Expr.const `Iff _) a) b := goalType | throwError "Goal type is not of the form `a ↔ b`"
 
-      -- 1. Create new `_`s with appropriate types.
-      let mvarId1 ← mkFreshExprMVar (Expr.forallE `xxx a b .default) (userName := "red")
-      let mvarId2 ← mkFreshExprMVar (Expr.forallE `yyy b a .default) (userName := "blue")
+     -- 1. 创建具有适当类型的新 `_`。
+     let mvarId1 ← mkFreshExprMVar (Expr.forallE `xxx a b .default) (userName := "red")
+     let mvarId2 ← mkFreshExprMVar (Expr.forallE `yyy b a .default) (userName := "blue")
 
-      -- 2. Assign the main goal to the expression `Iff.intro _ _`.
-      mvarId.assign (mkAppN (Expr.const `Iff.intro []) #[a, b, mvarId1, mvarId2])
+     -- 2. 将主目标分配给表达式 `Iff.intro _ _`。
+     mvarId.assign (mkAppN (Expr.const `Iff.intro []) #[a, b, mvarId1, mvarId2])
 
-      -- 3. Report the new `_`s to Lean as the new goals.
-      modify fun _ => { goals := [mvarId1.mvarId!, mvarId2.mvarId!] }
-    ```
+     -- 3. 将新的 `_` 报告给 Lean，作为新的目标。
+     modify fun _ => { goals := [mvarId1.mvarId!, mvarId2.mvarId!] }
+   ```
 
-    ```lean
-    theorem gradual (p q : Prop) : p ∧ q ↔ q ∧ p := by
-      step_1
-      step_2
-      step_3
-      step_4
-    ```
+   ```lean
+   theorem gradual (p q : Prop) : p ∧ q ↔ q ∧ p := by
+     step_1
+     step_2
+     step_3
+     step_4
+   ```
 
-2. In the first exercise, we used lower-level `modify` api to update our goals.
-    `liftMetaTactic`, `setGoals`, `appendGoals`, `replaceMainGoal`, `closeMainGoal`, etc. are all syntax sugars on top of `modify fun s : State => { s with goals := myMvarIds }`.
-    Please rewrite the `forker` tactic with:
+以下是这段内容的翻译：
 
-    **a)** `liftMetaTactic`
-    **b)** `setGoals`
-    **c)** `replaceMainGoal`
+---
 
-    ```lean
-    elab "forker" : tactic => do
-      let mvarId ← getMainGoal
-      let goalType ← getMainTarget
+2. 在第一个练习中，我们使用了较底层的 `modify` API 来更新我们的目标。`liftMetaTactic`、`setGoals`、`appendGoals`、`replaceMainGoal`、`closeMainGoal` 等都是在 `modify fun s : State => { s with goals := myMvarIds }` 之上的语法糖。请使用以下方法重写 `forker` 策略：
 
-      let (Expr.app (Expr.app (Expr.const `And _) p) q) := goalType | Lean.Meta.throwTacticEx `forker mvarId (m!"Goal is not of the form P ∧ Q")
+  **a)** `liftMetaTactic`
+  **b)** `setGoals`
+  **c)** `replaceMainGoal`
 
-      mvarId.withContext do
-        let mvarIdP ← mkFreshExprMVar p (userName := "red")
-        let mvarIdQ ← mkFreshExprMVar q (userName := "blue")
+  ```lean
+  elab "forker" : tactic => do
+    let mvarId ← getMainGoal
+    let goalType ← getMainTarget
 
-        let proofTerm := mkAppN (Expr.const `And.intro []) #[p, q, mvarIdP, mvarIdQ]
-        mvarId.assign proofTerm
+    let (Expr.app (Expr.app (Expr.const `And _) p) q) := goalType | Lean.Meta.throwTacticEx `forker mvarId (m!"Goal is not of the form P ∧ Q")
 
-        modify fun state => { goals := [mvarIdP.mvarId!, mvarIdQ.mvarId!] ++ state.goals.drop 1 }
-    ```
+    mvarId.withContext do
+      let mvarIdP ← mkFreshExprMVar p (userName := "red")
+      let mvarIdQ ← mkFreshExprMVar q (userName := "blue")
 
-    ```lean
-    example (A B C : Prop) : A → B → C → (A ∧ B) ∧ C := by
-      intro hA hB hC
-      forker
-      forker
-      assumption
-      assumption
-      assumption
-    ```
+      let proofTerm := mkAppN (Expr.const `And.intro []) #[p, q, mvarIdP, mvarIdQ]
+      mvarId.assign proofTerm
 
-3. In the first exercise, you created your own `intro` in `step_2` (with a hardcoded hypothesis name, but the basics are the same). When writing tactics, we usually want to use functions such as `intro`, `intro1`, `intro1P`, `introN` or `introNP`.
+      modify fun state => { goals := [mvarIdP.mvarId!, mvarIdQ.mvarId!] ++ state.goals.drop 1 }
+  ```
 
-    For each of the points below, create a tactic `introductor` (one per each point), that turns the goal `(ab: a = b) → (bc: b = c) → (a = c)`:
+  ```lean
+  example (A B C : Prop) : A → B → C → (A ∧ B) ∧ C := by
+    intro hA hB hC
+    forker
+    forker
+    assumption
+    assumption
+    assumption
+  ```
 
-    **a)** into the goal `(a = c)` with hypotheses `(ab✝: a = b)` and `(bc✝: b = c)`.
-    **b)** into the goal `(bc: b = c) → (a = c)` with hypothesis `(ab: a = b)`.
-    **c)** into the goal `(bc: b = c) → (a = c)` with hypothesis `(hello: a = b)`.
+3. 在第一个练习中，你在 `step_2` 中创建了自己的 `intro`（假设名是硬编码的，但基本原理是相同的）。在编写策略时，我们通常会使用 `intro`、`intro1`、`intro1P`、`introN` 或 `introNP` 等函数。
 
-    ```lean
-    example (a b c : Nat) : (ab: a = b) → (bc: b = c) → (a = c) := by
-      introductor
-      sorry
-    ```
+  对于下面的每一点，请创建一个名为 `introductor` 的策略（每一点对应一个策略），将目标 `(ab: a = b) → (bc: b = c) → (a = c)` 变为：
 
-    Hint: **"P"** in `intro1P` and `introNP` stands for **"Preserve"**.
+  **a)** 包含假设 `(ab✝: a = b)` 和 `(bc✝: b = c)` 的目标 `(a = c)`。
+  **b)** 包含假设 `(ab: a = b)` 的目标 `(bc: b = c) → (a = c)`。
+  **c)** 包含假设 `(hello: a = b)` 的目标 `(bc: b = c) → (a = c)`。
+
+  ```lean
+  example (a b c : Nat) : (ab: a = b) → (bc: b = c) → (a = c) := by
+    introductor
+    sorry
+  ```
+
+提示：`intro1P` 和 `introNP` 中的 "P" 代表 **"Preserve"**（保留）。
 -/

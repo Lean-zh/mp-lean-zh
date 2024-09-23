@@ -1,7 +1,7 @@
 /-
 ## 通过繁饰嵌入 DSL
 
-在本章中，我们将学习如何通过**繁饰（elaboration）**来构建一个领域特定语言（DSL）。我们不会全面探索 `MetaM` 的全部功能，而是简单地演示如何访问这个底层机制。
+在本章中，我们将学习如何通过繁饰（elaboration）来构建一个领域特定语言（DSL）。我们不会全面探索 `MetaM` 的全部功能，而是简单地演示如何访问这个底层机制。
 
 更具体地说，我们将使 Lean 理解 [IMP](http://concrete-semantics.org/concrete-semantics.pdf) 的语法。IMP 是一个简单的命令式语言，通常用于教学操作和指称语义。
 
