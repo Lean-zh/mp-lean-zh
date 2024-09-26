@@ -30,13 +30,15 @@ example : 1 = 42 := by
 -/
 
 syntax "custom_tactic" : tactic
-
+/-
+```lean
 /-- 错误：策略 'tacticCustom_tactic' 尚未实现 -/
 #guard_msgs in --#
 example : 42 = 42 := by
   custom_tactic
   sorry
-
+```
+-/
 /-
 接下来我们将在 `custom_tactic` 中添加 `rfl` 策略，这将允许我们证明前面的定理。
 -/
