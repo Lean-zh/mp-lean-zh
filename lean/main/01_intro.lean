@@ -1,6 +1,8 @@
 /-
 # 介绍
 
+本书英文原文：[Metaprogramming in Lean 4](https://leanprover-community.github.io/lean4-metaprogramming-book/)
+
 ## 本书的目的
 
 本书的目的是教你 Lean 4 元编程，你将学会：

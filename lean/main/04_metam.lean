@@ -333,7 +333,7 @@ def someNumber : Nat := (· + 2) $ 3
 /-!
 顺便说一下，这表明类型为 `Nat` 的项的标准式并不总是 `Nat` 构造函数的应用，它也可以是一个字面量。此外，注意 `#eval` 不仅可以用于计算项，还可以用于执行 `MetaM` 程序。
 
-`reduce` 的可选填参数允许我们跳过表达式的某些部分。例如，`reduce e (explicitOnly := true)` 不会归一化表达式 `e` 中的任何隐式参数。这可以带来更好的性能：由于标准式可能非常庞大，跳过用户无须看到的表达式部分可能是个好主意。
+`reduce` 的可选填参数允许我们跳过表达式的某些部分。例如，`reduce e (explicitOnly := true)` 不会标准化表达式 `e` 中的任何隐式参数。这可以带来更好的性能：由于标准式可能非常庞大，跳过用户无须看到的表达式部分可能是个好主意。
 
 `#reduce` 命令本质上就是 `reduce` 的一个应用：
 -/
@@ -342,35 +342,23 @@ def someNumber : Nat := (· + 2) $ 3
 -- 5
 
 /-!
-### Transparency
+### 透明度
 
-An ugly but important detail of Lean 4 metaprogramming is that any given
-expression does not have a single normal form. Rather, it has a normal form up
-to a given *transparency*.
+Lean 4 元编程中的一个复杂但重要的细节是，任何给定的表达式都不只有一个标准式，而是根据给定的**透明度（transparency）**来确定其标准式。
 
-A transparency is a value of `Lean.Meta.TransparencyMode`, an enumeration with
-four values: `reducible`, `instances`, `default` and `all`. Any `MetaM`
-computation has access to an ambient `TransparencyMode` which can be obtained
-with `Lean.Meta.getTransparency`.
+透明度是 `Lean.Meta.TransparencyMode` 的一个枚举值，具有四个选项：`reducible`、`instances`、`default` 和 `all`。任何 `MetaM` 计算都可以访问一个环境透明度模式，使用 `Lean.Meta.getTransparency` 获取。
 
-The current transparency determines which constants get unfolded during
-normalisation, e.g. by `reduce`. (To unfold a constant means to replace it with
-its definition.) The four settings unfold progressively more constants:
+当前的透明度决定了在标准化过程中（如通过 `reduce`）哪些常量会被展开。（展开常量是指用其定义替换常量本身。）这四个设置逐步展开更多的常量：
 
-- `reducible`: unfold only constants tagged with the `@[reducible]` attribute.
-  Note that `abbrev` is a shorthand for `@[reducible] def`.
-- `instances`: unfold reducible constants and constants tagged with the
-  `@[instance]` attribute. Again, the `instance` command is a shorthand for
-  `@[instance] def`.
-- `default`: unfold all constants except those tagged as `@[irreducible]`.
-- `all`: unfold all constants, even those tagged as `@[irreducible]`.
+- `reducible`：只展开带有 `@[reducible]` 属性的常量。注意，`abbrev` 是 `@[reducible] def` 的简写。
+- `instances`：展开可归约 `reducible` 常量以及带有 `@[instance]` 属性的常量。同样，`instance` 命令是 `@[instance] def` 的简写。
+- `default`：展开所有常量，除了那些被标记为 `@[irreducible]` 的常量。
+- `all`：展开所有常量，即使是那些被标记为 `@[irreducible]` 的常量。
 
-The ambient transparency is usually `default`. To execute an operation with a
-specific transparency, use `Lean.Meta.withTransparency`. There are also
-shorthands for specific transparencies, e.g. `Lean.Meta.withReducible`.
+环境透明度通常为 `default`。要以特定透明度执行操作，使用 `Lean.Meta.withTransparency`。也有一些特定透明度的简写，例如 `Lean.Meta.withReducible`。
 
-Putting everything together for an example (where we use `Lean.Meta.ppExpr` to
-pretty-print an expression): -/
+将所有内容结合在一起看一个示例（我们使用 `Lean.Meta.ppExpr` 来美观打印表达式）：
+-/
 
 def traceConstWithTransparency (md : TransparencyMode) (c : Name) :
     MetaM Format := do
@@ -381,16 +369,14 @@ def                defaultDef     : Nat      := irreducibleDef + 1
 abbrev             reducibleDef   : Nat      := defaultDef + 1
 
 /-!
-We start with `reducible` transparency, which only unfolds `reducibleDef`:
+我们从 `reducible` 透明度开始，它只展开 `reducibleDef`:
 -/
 
 #eval traceConstWithTransparency .reducible ``reducibleDef
 -- defaultDef + 1
 
 /-!
-If we repeat the above command but let Lean print implicit arguments as well,
-we can see that the `+` notation amounts to an application of the `hAdd`
-function, which is a member of the `HAdd` typeclass:
+如果我们重复上述命令，并让 Lean 打印出隐式参数，我们可以看到 `+` 符号实际上是 `hAdd` 函数的应用，而该函数是 `HAdd` 类型类的一个成员：
 -/
 
 set_option pp.explicit true
@@ -398,61 +384,44 @@ set_option pp.explicit true
 -- @HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) defaultDef 1
 
 /-!
-When we reduce with `instances` transparency, this applications is unfolded and
-replaced by `Nat.add`:
+当我们使用 `instances` 透明度进行归约时，这个应用被展开并替换为 `Nat.add`：
 -/
 
 #eval traceConstWithTransparency .instances ``reducibleDef
 -- Nat.add defaultDef 1
 
 /-!
-With `default` transparency, `Nat.add` is unfolded as well:
+使用 `default` 透明度时，`Nat.add` 也会被展开：
 -/
 
 #eval traceConstWithTransparency .default ``reducibleDef
 -- Nat.succ (Nat.succ irreducibleDef)
 
 /-!
-And with `TransparencyMode.all`, we're finally able to unfold `irreducibleDef`:
+使用 `TransparencyMode.all` 时，我们最终能够展开 `irreducibleDef`：
 -/
 
 #eval traceConstWithTransparency .all ``reducibleDef
 -- 3
 
 /-!
-The `#eval` commands illustrate that the same term, `reducibleDef`, can have a
-different normal form for each transparency.
+`#eval` 命令展示了同一个术语 `reducibleDef` 可以在每种透明度下具有不同的标准式。
 
-Why all this ceremony? Essentially for performance: if we allowed normalisation
-to always unfold every constant, operations such as type class search would
-become prohibitively expensive. The tradeoff is that we must choose the
-appropriate transparency for each operation that involves normalisation.
+为什么要有这么多步骤？基本上是为了性能：如果我们允许标准化总是展开每个常量，诸如类型类搜索等操作的开销将变得无法接受。权衡在于我们必须为每个涉及标准化的操作选择适当的透明度。
 
+### 弱头标准化（Weak Head Normalisation）
 
-### Weak Head Normalisation
+透明度解决了标准化中的一些性能问题。但更重要的是要认识到，对于许多情况，我们根本不需要完全标准化术语。假设我们正在构建一个自动拆分类型为 `P ∧ Q` 的假设的策略。如果 `X` 归约为 `P ∧ Q`，我们可能希望这个策略能够识别出假设 `h : X`。但是，如果 `P` 进一步归约为 `Y ∨ Z`，具体的 `Y` 和 `Z` 对我们来说并不重要，归约 `P` 就成了多余的工作。
 
-Transparency addresses some of the performance issues with normalisation. But
-even more important is to recognise that for many purposes, we don't need to
-fully normalise terms at all. Suppose we are building a tactic that
-automatically splits hypotheses of the type `P ∧ Q`. We might want this tactic
-to recognise a hypothesis `h : X` if `X` reduces to `P ∧ Q`. But if `P`
-additionally reduces to `Y ∨ Z`, the specific `Y` and `Z` do not concern us.
-Reducing `P` would be unnecessary work.
+这种情况非常常见，因此完全标准化的 `reduce` 实际上很少使用。Lean 中标准化的主力工具是 `whnf`，它将表达式简化为**弱头标准式**（WHNF）。
 
-This situation is so common that the fully normalising `reduce` is in fact
-rarely used. Instead, the normalisation workhorse of Lean is `whnf`, which
-reduces an expression to *weak head normal form* (WHNF).
-
-Roughly speaking, an expression `e` is in weak-head normal form when it has the
-form
+简单来说，当表达式 `e` 具有如下形式时，它处于弱头标准式：
 
 ```text
 e = f x₁ ... xₙ   (n ≥ 0)
 ```
 
-and `f` cannot be reduced (at the current transparency). To conveniently check
-the WHNF of an expression, we define a function `whnf'`, using some functions
-that will be discussed in the Elaboration chapter.
+并且 `f` 在当前透明度下不能被进一步归约。为了方便检查表达式的 WHNF，我们定义了一个函数 `whnf'`，使用了一些将在繁饰章节中讨论的函数。
 -/
 
 open Lean.Elab.Term in
@@ -461,101 +430,95 @@ def whnf' (e : TermElabM Syntax) : TermElabM Format := do
   ppExpr (← whnf e)
 
 /-!
-Now, here are some examples of expressions in WHNF.
+以下是一些 WHNF（弱头归一形式）中的表达式示例。
 
-Constructor applications are in WHNF (with some exceptions for numeric types):
+构造子的应用处于 WHNF（某些数字类型除外）：
 -/
 
 #eval whnf' `(List.cons 1 [])
 -- [1]
 
 /-!
-The *arguments* of an application in WHNF may or may not be in WHNF themselves:
+WHNF 中应用的**参数**本身可能是 WHNF，也可能不是：
 -/
 
 #eval whnf' `(List.cons (1 + 1) [])
 -- [1 + 1]
 
 /-!
-Applications of constants are in WHNF if the current transparency does not
-allow us to unfold the constants:
+如果当前透明度不允许我们展开常量，那么常量的应用处于 WHNF：
 -/
 
 #eval withTransparency .reducible $ whnf' `(List.append [1] [2])
 -- List.append [1] [2]
 
 /-!
-Lambdas are in WHNF:
+Lambda 表达式处于 WHNF：
 -/
 
 #eval whnf' `(λ x : Nat => x)
 -- fun x => x
 
 /-!
-Foralls are in WHNF:
+全称量词（Foralls）处于 WHNF：
 -/
 
 #eval whnf' `(∀ x, x > 0)
 -- ∀ (x : Nat), x > 0
 
 /-!
-Sorts are in WHNF:
+类型处于 WHNF：
 -/
 
 #eval whnf' `(Type 3)
 -- Type 3
 
 /-!
-Literals are in WHNF:
+字面量处于 WHNF：
 -/
 
 #eval whnf' `((15 : Nat))
 -- 15
 
 /-!
-Here are some more expressions in WHNF which are a bit tricky to test:
+以下是一些处于 WHNF（弱头归一形式）的表达式，这些表达式测试起来有些棘手：
 
 ```lean
-?x 0 1  -- Assuming the metavariable `?x` is unassigned, it is in WHNF.
-h 0 1   -- Assuming `h` is a local hypothesis, it is in WHNF.
+?x 0 1  -- 假设元变量 `?x` 未被赋值，它处于 WHNF。
+h 0 1   -- 假设 `h` 是一个局部假设，它处于 WHNF。
 ```
 
-On the flipside, here are some expressions that are not in WHNF.
+另一方面，以下是不处于 WHNF 的一些表达式。
 
-Applications of constants are not in WHNF if the current transparency allows us
-to unfold the constants:
+如果当前透明度允许我们展开常量，那么常量的应用不处于 WHNF：
 -/
 
 #eval whnf' `(List.append [1])
 -- fun x => 1 :: List.append [] x
 
 /-!
-Applications of lambdas are not in WHNF:
+Lambda 表达式的应用不处于 WHNF：
 -/
 
 #eval whnf' `((λ x y : Nat => x + y) 1)
 -- `fun y => 1 + y`
 
 /-!
-`let` bindings are not in WHNF:
+`let` 绑定不处于 WHNF：
 -/
 
 #eval whnf' `(let x : Nat := 1; x)
 -- 1
 
 /-!
-And again some tricky examples:
+再次来看一些棘手的例子：
 
 ```lean
-?x 0 1 -- Assuming `?x` is assigned (e.g. to `Nat.add`), its application is not
-          in WHNF.
-h 0 1  -- Assuming `h` is a local definition (e.g. with value `Nat.add`), its
-          application is not in WHNF.
+?x 0 1 -- 假设 `?x` 被赋值（例如赋值为 `Nat.add`），它的应用不处于 WHNF。
+h 0 1  -- 假设 `h` 是一个局部定义（例如值为 `Nat.add`），它的应用不处于 WHNF。
 ```
 
-Returning to the tactic that motivated this section, let us write a function
-that matches a type of the form `P ∧ Q`, avoiding extra computation. WHNF
-makes it easy:
+回到本节的动机策略，让我们编写一个函数，用于匹配类型形式为 `P ∧ Q`，同时避免额外的计算。WHNF 使得这一操作变得简单：
 -/
 
 def matchAndReducing (e : Expr) : MetaM (Option (Expr × Expr)) := do
@@ -564,14 +527,9 @@ def matchAndReducing (e : Expr) : MetaM (Option (Expr × Expr)) := do
   | _ => return none
 
 /-
-By using `whnf`, we ensure that if `e` evaluates to something of the form `P
-∧ Q`, we'll notice. But at the same time, we don't perform any unnecessary
-computation in `P` or `Q`.
+通过使用 `whnf`，我们确保如果 `e` 计算为 `P ∧ Q` 形式的内容，我们能够检测到。但与此同时，我们不会在 `P` 或 `Q` 中执行任何不必要的计算。
 
-However, our 'no unnecessary computation' mantra also means that if we want to
-perform deeper matching on an expression, we need to use `whnf` multiple times.
-Suppose we want to match a type of the form `P ∧ Q ∧ R`. The correct way to do
-this uses `whnf` twice:
+然而，我们的「避免不必要的计算」原则也意味着，如果我们想在表达式上进行更深层次的匹配，需要多次使用 `whnf`。假设我们想匹配 `P ∧ Q ∧ R` 形式的类型，正确的做法是使用 `whnf` 两次：
 -/
 
 def matchAndReducing₂ (e : Expr) : MetaM (Option (Expr × Expr × Expr)) := do
@@ -583,67 +541,38 @@ def matchAndReducing₂ (e : Expr) : MetaM (Option (Expr × Expr × Expr)) := do
   | _ => return none
 
 /-!
-This sort of deep matching up to computation could be automated. But until
-someone builds this automation, we have to figure out the necessary `whnf`s
-ourselves.
-
+这种基于计算的深层匹配是可以自动化的。但在有人构建这种自动化工具之前，我们必须自己确定所需的 `whnf` 调用。
 
 ### 定义等价
 
-As mentioned, definitional equality is equality up to computation. Two
-expressions `t` and `s` are definitionally equal or *defeq* (at the current
-transparency) if their normal forms (at the current transparency) are equal.
+如前述，定义等价是基于计算的相等性。如果两个表达式 `t` 和 `s` 的标准式相等（在当前透明度下），它们就是定义等价（简写作defeq）的。
 
-To check whether two expressions are defeq, use `Lean.Meta.isDefEq` with type
-signature
+要检查两个表达式是否定义等价，可以使用 `Lean.Meta.isDefEq`，其类型签名为：
 
 ```lean
 isDefEq : Expr → Expr → MetaM Bool
 ```
 
-Even though definitional equality is defined in terms of normal forms, `isDefEq`
-does not actually compute the normal forms of its arguments, which would be very
-expensive. Instead, it tries to "match up" `t` and `s` using as few reductions
-as possible. This is a necessarily heuristic endeavour and when the heuristics
-misfire, `isDefEq` can become very expensive. In the worst case, it may have to
-reduce `s` and `t` so often that they end up in normal form anyway. But usually
-the heuristics are good and `isDefEq` is reasonably fast.
+尽管定义等价是通过标准式定义的，但 `isDefEq` 实际上并不会计算参数的标准式，因为这代价太高。相反，它尝试以尽可能少的归约来「匹配」 `t` 和 `s`。这是一项启发式的任务，当启发式方法失效时，`isDefEq` 的计算代价可能非常高。在最坏的情况下，它可能不得不频繁地归约 `s` 和 `t`，最终它们仍会以标准式结束。不过，通常情况下，启发式方法是有效的，`isDefEq` 速度相对较快。
 
-If expressions `t` and `u` contain assignable metavariables, `isDefEq` may
-assign these metavariables to make `t` defeq to `u`. We also say that `isDefEq`
-*unifies* `t` and `u`; such unification queries are sometimes written `t =?= u`.
-For instance, the unification `List ?m =?= List Nat` succeeds and assigns `?m :=
-Nat`. The unification `Nat.succ ?m =?= n + 1` succeeds and assigns `?m := n`.
-The unification `?m₁ + ?m₂ + ?m₃ =?= m + n - k` fails and no metavariables are
-assigned (even though there is a 'partial match' between the expressions).
+如果表达式 `t` 和 `u` 包含可赋值的元变量，`isDefEq` 可能会将这些元变量赋值，使得 `t` 与 `u` 定义等价。我们也可以说 `isDefEq` **合一（unify）** 了 `t` 和 `u`；这种合一查询有时写作 `t =?= u`。例如，合一 `List ?m =?= List Nat` 成功并赋值 `?m := Nat`。合一 `Nat.succ ?m =?= n + 1` 成功并赋值 `?m := n`。合一 `?m₁ + ?m₂ + ?m₃ =?= m + n - k` 失败，且没有元变量被赋值（尽管表达式之间存在「部分匹配」）。
 
-Whether `isDefEq` considers a metavariable assignable is determined by two
-factors:
+`isDefEq` 是否将一个元变量视为可赋值由两个因素决定：
 
-1. The metavariable's depth must be equal to the current `MetavarContext` depth.
-   See the [Metavariable Depth section](#metavariable-depth).
-2. Each metavariable has a *kind* (a value of type `MetavarKind`) whose sole
-   purpose is to modify the behaviour of `isDefEq`. Possible kinds are:
-   - Natural: `isDefEq` may freely assign the metavariable. This is the default.
-   - Synthetic: `isDefEq` may assign the metavariable, but avoids doing so if
-     possible. For example, suppose `?n` is a natural metavariable and `?s` is a
-     synthetic metavariable. When faced with the unification problem
-     `?s =?= ?n`, `isDefEq` assigns `?n` rather than `?s`.
-   - Synthetic opaque: `isDefEq` never assigns the metavariable.
+1. 元变量的深度必须等于当前 `MetavarContext` 的深度。参见[元变量深度部分](#元变量深度)。
+2. 每个元变量都有一个**种类**（kind）（`MetavarKind` 类型的值），其唯一目的是修改 `isDefEq` 的行为。可能的种类包括：
+   - 自然：`isDefEq` 可以自由地赋值该元变量。这是默认值。
+   - 合成：`isDefEq` 可以赋值该元变量，但如果可能，尽量避免赋值。例如，假设 `?n` 是一个自然元变量，而 `?s` 是一个合成元变量。当面对 `?s =?= ?n` 的合一问题时，`isDefEq` 会赋值 `?n` 而不是 `?s`。
+   - 合成不透明：`isDefEq` 永远不会赋值该元变量。
 
+## 构造表达式
 
-## Constructing Expressions
+在前一章中，我们看到了用于构建表达式的一些基本函数：`Expr.app`、`Expr.const`、`mkAppN` 等。这些函数本身没有问题，但 `MetaM` 的附加功能通常提供了更方便的方式。
 
-In the previous chapter, we saw some primitive functions for building
-expressions: `Expr.app`, `Expr.const`, `mkAppN` and so on. There is nothing
-wrong with these functions, but the additional facilities of `MetaM` often
-provide more convenient ways.
+### 应用
 
-
-### Applications
-
-When we write regular Lean code, Lean helpfully infers many implicit arguments
-and universe levels. If it did not, our code would look rather ugly: -/
+当我们编写常规的 Lean 代码时，Lean 会帮助我们推断许多隐式参数和宇宙级别。如果不这样做，我们的代码将显得相当冗长：
+-/
 
 def appendAppend (xs ys : List α) := (xs.append ys).append xs
 
@@ -654,12 +583,9 @@ set_option pp.explicit true in
 -- fun {α : Type u_1} (xs ys : List.{u_1} α) => @List.append.{u_1} α (@List.append.{u_1} α xs ys) xs
 
 /-!
-The `.{u_1}` suffixes are universe levels, which must be given for every
-polymorphic constant. And of course the type `α` is passed around everywhere.
+`.{u_1}` 后缀是宇宙级别，必须为每个多态常量提供。当然，类型 `α` 也会被传递到各处。
 
-Exactly the same problem occurs during metaprogramming when we construct
-expressions. A hand-made expression representing the right-hand side of the
-above definition looks like this:
+在元编程中构造表达式时也会遇到完全相同的问题。一个手工构建的表达式，表示上述定义的右侧，看起来是这样的：
 -/
 
 def appendAppendRHSExpr₁ (u : Level) (α xs ys : Expr) : Expr :=
@@ -667,44 +593,30 @@ def appendAppendRHSExpr₁ (u : Level) (α xs ys : Expr) : Expr :=
     #[α, mkAppN (.const ``List.append [u]) #[α, xs, ys], xs]
 
 /-!
-Having to specify the implicit arguments and universe levels is annoying and
-error-prone. So `MetaM` provides a helper function which allows us to omit
-implicit information: `Lean.Meta.mkAppM` of type
+必须指定隐式参数和宇宙级别是很麻烦且容易出错的。因此，`MetaM` 提供了一个帮助函数，允许我们省略隐式信息：`Lean.Meta.mkAppM`，其类型为：
 
 ```lean
 mkAppM : Name → Array Expr → MetaM Expr
 ```
 
-Like `mkAppN`, `mkAppM` constructs an application. But while `mkAppN` requires
-us to give all universe levels and implicit arguments ourselves, `mkAppM` infers
-them. This means we only need to provide the explicit arguments, which makes for
-a much shorter example:
+与 `mkAppN` 类似，`mkAppM` 构造一个应用。但是，`mkAppN` 需要我们自己提供所有的宇宙级别和隐式参数，而 `mkAppM` 会自动推断它们。这意味着我们只需要提供显式参数，示例因此也会简短得多：
 -/
 
 def appendAppendRHSExpr₂ (xs ys : Expr) : MetaM Expr := do
   mkAppM ``List.append #[← mkAppM ``List.append #[xs, ys], xs]
 
 /-!
-Note the absence of any `α`s and `u`s. There is also a variant of `mkAppM`,
-`mkAppM'`, which takes an `Expr` instead of a `Name` as the first argument,
-allowing us to construct applications of expressions which are not constants.
+注意，这里没有出现任何 `α` 和 `u`。`mkAppM` 还有一个变体 `mkAppM'`，它将第一个参数从 `Name` 改为 `Expr`，允许我们构造非常量表达式的应用。
 
-However, `mkAppM` is not magic: if you write `mkAppM ``List.append #[]`, you
-will get an error at runtime. This is because `mkAppM` tries to determine what
-the type `α` is, but with no arguments given to `append`, `α` could be anything,
-so `mkAppM` fails.
+不过，`mkAppM` 并不是万能的：如果你写 `mkAppM ``List.append #[]`，在运行时会报错。这是因为 `mkAppM` 尝试确定类型 `α`，但由于 `append` 没有给出任何参数，`α` 可以是任何类型，因此 `mkAppM` 无法成功推断。
 
-Another occasionally useful variant of `mkAppM` is `Lean.Meta.mkAppOptM` of type
+另一个有时很有用的 `mkAppM` 变体是 `Lean.Meta.mkAppOptM`，其类型为：
 
 ```lean
 mkAppOptM : Name → Array (Option Expr) → MetaM Expr
 ```
 
-Whereas `mkAppM` always infers implicit and instance arguments and always
-requires us to give explicit arguments, `mkAppOptM` lets us choose freely which
-arguments to provide and which to infer. With this, we can, for example, give
-instances explicitly, which we use in the following example to give a
-non-standard `Ord` instance.
+与 `mkAppM` 总是推断隐式和实例参数并且要求我们提供显式参数不同，`mkAppOptM` 让我们可以自由选择提供哪些参数以及推断哪些参数。例如，我们可以显式地提供实例，在下面的示例中，我们用它来提供一个非标准的 `Ord` 实例。
 -/
 
 def revOrd : Ord Nat where
@@ -719,17 +631,11 @@ def ordExpr : MetaM Expr := do
 --   (OfNat.ofNat.{0} Nat 1 (instOfNatNat 1))
 
 /-!
-Like `mkAppM`, `mkAppOptM` has a primed variant `Lean.Meta.mkAppOptM'` which
-takes an `Expr` instead of a `Name` as the first argument. The file which
-contains `mkAppM` also contains various other helper functions, e.g. for making
-list literals or `sorry`s.
+与 `mkAppM` 类似，`mkAppOptM` 也有一个加了撇号的变体 `Lean.Meta.mkAppOptM'`，它将第一个参数从 `Name` 改为 `Expr`。包含 `mkAppM` 的文件还包含了其他各种帮助函数，例如用于构造列表字面量或 `sorry` 的函数。
 
+### Lambdas 和 Foralls
 
-### Lambdas and Foralls
-
-Another common task is to construct expressions involving `λ` or `∀` binders.
-Suppose we want to create the expression `λ (x : Nat), Nat.add x x`. One way is
-to write out the lambda directly:
+另一个常见的任务是构造涉及 `λ` 或 `∀` 绑定的表达式。假设我们想创建表达式 `λ (x : Nat), Nat.add x x`。一种方法是直接写出 lambda：
 -/
 
 def doubleExpr₁ : Expr :=
@@ -740,32 +646,16 @@ def doubleExpr₁ : Expr :=
 -- fun x => Nat.add x x
 
 /-!
-This works, but the use of `bvar` is highly unidiomatic. Lean uses a so-called
-*locally closed* variable representation. This means that all but the
-lowest-level functions in the Lean API expect expressions not to contain 'loose
-`bvar`s', where a `bvar` is loose if it is not bound by a binder in the same
-expression. (Outside of Lean, such variables are usually called 'free'. The name
-`bvar` -- 'bound variable' -- already indicates that `bvar`s are never supposed
-to be free.)
+这种方法虽然有效，但直接使用 `bvar` 是非常不符合惯例的。Lean 使用所谓的**局部封闭（locally closed）**变量表示法。这意味着 Lean API 中除了最低层的函数外，其他函数都期望表达式不包含「松弛的 `bvar`」，其中松弛的意思是，如果它没有被同一个表达式中的某个绑定器绑定。（在 Lean 之外，这样的变量通常被称为「自由变量」。名称 `bvar` —— "bound variable"（绑定变量） —— 已经表明 `bvar` 永远不应是自由的。）
 
-As a result, if in the above example we replace `mkAppN` with the slightly
-higher-level `mkAppM`, we get a runtime error. Adhering to the locally closed
-convention, `mkAppM` expects any expressions given to it to have no loose bound
-variables, and `.bvar 0` is precisely that.
+因此，如果在上面的例子中，我们用稍微高层的 `mkAppM` 替换 `mkAppN`，会导致运行时错误。按照局部封闭的约定，`mkAppM` 期望任何传递给它的表达式都不包含松弛的绑定变量，而 `.bvar 0` 恰好就是这样的松弛变量。
 
-So instead of using `bvar`s directly, the Lean way is to construct expressions
-with bound variables in two steps:
+因此，Lean 的做法是通过两步构造带有绑定变量的表达式，而不是直接使用 `bvar`：
 
-1. Construct the body of the expression (in our example: the body of the
-   lambda), using temporary local hypotheses (`fvar`s) to stand in for the bound
-   variables.
-2. Replace these `fvar`s with `bvar`s and, at the same time, add the
-   corresponding lambda binders.
+1. 构造表达式的主体（在我们的例子中是 lambda 的主体），使用临时的局部假设（`fvar`）来代替绑定变量。
+2. 将这些 `fvar` 替换为 `bvar`，同时添加相应的 lambda 绑定器。
 
-This process ensures that we do not need to handle expressions with loose
-`bvar`s at any point (except during step 2, which is performed 'atomically' by a
-bespoke function). Applying the process to our example:
-
+这个过程确保我们不需要在任何时候处理带有松弛 `bvar` 的表达式（除了步骤 2，它是通过专门的函数「原子化」执行的）。将该过程应用于我们的例子：
 -/
 
 def doubleExpr₂ : MetaM Expr :=
@@ -778,40 +668,29 @@ def doubleExpr₂ : MetaM Expr :=
 -- fun x => Nat.add x x
 
 /-!
-There are two new functions. First, `Lean.Meta.withLocalDecl` has type
+这里有两个新函数。首先，`Lean.Meta.withLocalDecl` 的类型为：
 
 ```lean
 withLocalDecl (name : Name) (bi : BinderInfo) (type : Expr) (k : Expr → MetaM α) : MetaM α
 ```
 
-Given a variable name, binder info and type, `withLocalDecl` constructs a new
-`fvar` and passes it to the computation `k`. The `fvar` is available in the local
-context during the execution of `k` but is deleted again afterwards.
+给定一个变量名称、绑定器信息和类型，`withLocalDecl` 构造一个新的 `fvar` 并将其传递给计算 `k`。在执行 `k` 时，该 `fvar` 在局部上下文中可用，但在之后会被删除。
 
-The second new function is `Lean.Meta.mkLambdaFVars` with type (ignoring some
-optional arguments)
+第二个新函数是 `Lean.Meta.mkLambdaFVars`，其类型（忽略一些可选填参数）为：
 
-```
+```lean
 mkLambdaFVars : Array Expr → Expr → MetaM Expr
 ```
 
-This function takes an array of `fvar`s and an expression `e`. It then adds one
-lambda binder for each `fvar` `x` and replaces every occurrence of `x` in `e`
-with a bound variable corresponding to the new lambda binder. The returned
-expression does not contain the `fvar`s any more, which is good since they
-disappear after we leave the `withLocalDecl` context. (Instead of `fvar`s, we
-can also give `mvar`s to `mkLambdaFVars`, despite its name.)
+此函数接受一个 `fvar` 数组和一个表达式 `e`。然后为每个 `fvar` `x` 添加一个 lambda 绑定器，并将 `e` 中的每个 `x` 替换为与新 lambda 绑定器对应的绑定变量。返回的表达式不再包含 `fvar`，这是很好的，因为当我们离开 `withLocalDecl` 上下文时，`fvar` 就会消失。（尽管名称中有 `fvar`，但我们也可以将 `mvar` 传递给 `mkLambdaFVars`。）
 
-Some variants of the above functions may be useful:
+以下是这些函数的有用变体：
 
-- `withLocalDecls` declares multiple temporary `fvar`s.
-- `mkForallFVars` creates `∀` binders instead of `λ` binders. `mkLetFVars`
-  creates `let` binders.
-- `mkArrow` is the non-dependent version of `mkForallFVars` which construcs
-  a function type `X → Y`. Since the type is non-dependent, there is no need
-  for temporary `fvar`s.
+- `withLocalDecls` 声明多个临时 `fvar`。
+- `mkForallFVars` 创建 `∀` 绑定器而不是 `λ` 绑定器。`mkLetFVars` 创建 `let` 绑定器。
+- `mkArrow` 是 `mkForallFVars` 的非依赖版本，它构造函数类型 `X → Y`。由于类型是非依赖的，因此不需要临时 `fvar`。
 
-Using all these functions, we can construct larger expressions such as this one:
+使用所有这些函数，我们可以构造更大的表达式，例如：
 
 ```lean
 λ (f : Nat → Nat), ∀ (n : Nat), f n = f (n + 1)
@@ -829,9 +708,7 @@ def somePropExpr : MetaM Expr := do
     mkLambdaFVars #[f] feqn
 
 /-!
-The next line registers `someProp` as a name for the expression we've just
-constructed, allowing us to play with it more easily. The mechanisms behind this
-are discussed in the Elaboration chapter.
+下一行将 `someProp` 注册为我们刚刚构造的表达式的名称，使我们可以更轻松地操作它。其背后的机制将在繁饰章节中讨论。
 -/
 
 elab "someProp" : term => somePropExpr
@@ -843,76 +720,47 @@ elab "someProp" : term => somePropExpr
 
 
 /-!
-### Deconstructing Expressions
+### 解构表达式
 
-Just like we can construct expressions more easily in `MetaM`, we can also
-deconstruct them more easily. Particularly useful is a family of functions for
-deconstructing expressions which start with `λ` and `∀` binders.
+就像我们可以在 `MetaM` 中更轻松地构造表达式一样，我们也可以更轻松地解构表达式。特别有用的是一组用于解构以 `λ` 和 `∀` 绑定器开头的表达式的函数。
 
-When we are given a type of the form `∀ (x₁ : T₁) ... (xₙ : Tₙ), U`, we are
-often interested in doing something with the conclusion `U`. For instance, the
-`apply` tactic, when given an expression `e : ∀ ..., U`, compares `U` with the
-current target to determine whether `e` can be applied.
+当我们得到形如 `∀ (x₁ : T₁) ... (xₙ : Tₙ), U` 的类型时，通常我们会对结论 `U` 做一些操作。例如，当给定一个表达式 `e : ∀ ..., U` 时，`apply` 策略会比较 `U` 与当前目标，以确定是否可以应用 `e`。
 
-To do this, we could repeatedly match on the type expression, removing `∀`
-binders until we get to `U`. But this would leave us with an `U` containing
-unbound `bvar`s, which, as we saw, is bad. Instead, we use
-`Lean.Meta.forallTelescope` of type
+为此，我们可以重复匹配类型表达式，逐步去除 `∀` 绑定器，直到得到 `U`。但这样会导致 `U` 包含未绑定的 `bvar`，如我们所见，这不是好事。相反，我们使用 `Lean.Meta.forallTelescope`，其类型为：
 
-```
+```lean
 forallTelescope (type : Expr) (k : Array Expr → Expr → MetaM α) : MetaM α
 ```
 
-Given `type = ∀ (x₁ : T₁) ... (xₙ : Tₙ), U x₁ ... xₙ`, this function creates one
-fvar `fᵢ` for each `∀`-bound variable `xᵢ` and replaces each `xᵢ` with `fᵢ` in
-the conclusion `U`. It then calls the computation `k`, passing it the `fᵢ` and
-the conclusion `U f₁ ... fₙ`. Within this computation, the `fᵢ` are registered
-in the local context; afterwards, they are deleted again (similar to
-`withLocalDecl`).
+给定 `type = ∀ (x₁ : T₁) ... (xₙ : Tₙ), U x₁ ... xₙ`，此函数为每个 `∀` 绑定的变量 `xᵢ` 创建一个 `fvar` `fᵢ`，并在结论 `U` 中将每个 `xᵢ` 替换为 `fᵢ`。然后它调用计算 `k`，传递 `fᵢ` 和结论 `U f₁ ... fₙ`。在此计算中，`fᵢ` 会注册在局部语境中；计算结束后，它们会被删除（类似于 `withLocalDecl`）。
 
-There are many useful variants of `forallTelescope`:
+`forallTelescope` 有许多有用的变体：
 
-- `forallTelescopeReducing`: like `forallTelescope` but matching is performed up
-  to computation. This means that if you have an expression `X` which is
-  different from but defeq to `∀ x, P x`, `forallTelescopeReducing X` will
-  deconstruct `X` into `x` and `P x`. The non-reducing `forallTelescope` would
-  not recognise `X` as a quantified expression. The matching is performed by
-  essentially calling `whnf` repeatedly, using the ambient transparency.
-- `forallBoundedTelescope`: like `forallTelescopeReducing` (even though there is
-  no "reducing" in the name) but stops after a specified number of `∀` binders.
-- `forallMetaTelescope`, `forallMetaTelescopeReducing`,
-  `forallMetaBoundedTelescope`: like the corresponding non-`meta` functions, but
-  the bound variables are replaced by new `mvar`s instead of `fvar`s. Unlike the
-  non-`meta` functions, the `meta` functions do not delete the new metavariables
-  after performing some computation, so the metavariables remain in the
-  environment indefinitely.
-- `lambdaTelescope`, `lambdaTelescopeReducing`, `lambdaBoundedTelescope`,
-  `lambdaMetaTelescope`: like the corresponding `forall` functions, but for
-  `λ` binders instead of `∀`.
+- `forallTelescopeReducing`：与 `forallTelescope` 类似，但匹配是在计算后执行的。这意味着如果你有一个表达式 `X`，它不同于但定义等同于 `∀ x, P x`，`forallTelescopeReducing X` 会将 `X` 解构为 `x` 和 `P x`。非归约的 `forallTelescope` 不会识别 `X` 为量化表达式。匹配是通过重复调用 `whnf` 来执行的，使用环境透明度。
+- `forallBoundedTelescope`：类似于 `forallTelescopeReducing`（尽管名称中没有“reducing”），但在指定数量的 `∀` 绑定器之后停止。
+- `forallMetaTelescope`，`forallMetaTelescopeReducing`，`forallMetaBoundedTelescope`：与相应的非 `meta` 函数类似，但绑定变量被替换为新的 `mvar` 而不是 `fvar`。与非 `meta` 函数不同，`meta` 函数在执行某些计算后不会删除新的元变量，因此这些元变量将无限期保留在环境中。
+- `lambdaTelescope`，`lambdaTelescopeReducing`，`lambdaBoundedTelescope`，`lambdaMetaTelescope`：类似于相应的 `forall` 函数，但用于 `λ` 绑定器，而不是 `∀`。
 
-Using one of the telescope functions, we can implement our own `apply` tactic:
+使用这些 telescope 函数之一，我们可以实现自己的 `apply` 策略：
 -/
 
 def myApply (goal : MVarId) (e : Expr) : MetaM (List MVarId) := do
-  -- Check that the goal is not yet assigned.
+  -- 检查目标是否尚未分配。
   goal.checkNotAssigned `myApply
-  -- Operate in the local context of the goal.
+  -- 在目标的局部上下文中操作。
   goal.withContext do
-    -- Get the goal's target type.
+    -- 获取目标的目标类型。
     let target ← goal.getType
-    -- Get the type of the given expression.
+    -- 获取给定表达式的类型。
     let type ← inferType e
-    -- If `type` has the form `∀ (x₁ : T₁) ... (xₙ : Tₙ), U`, introduce new
-    -- metavariables for the `xᵢ` and obtain the conclusion `U`. (If `type` does
-    -- not have this form, `args` is empty and `conclusion = type`.)
+    -- 如果 `type` 的形式为 `∀ (x₁ : T₁) ... (xₙ : Tₙ), U`，为 `xᵢ` 引入新的元变量，并获取结论 `U`。
+    -- （如果 `type` 没有这种形式，`args` 为空，`conclusion = type`。）
     let (args, _, conclusion) ← forallMetaTelescopeReducing type
-    -- If the conclusion unifies with the target:
+    -- 如果结论与目标统一：
     if ← isDefEq target conclusion then
-      -- Assign the goal to `e x₁ ... xₙ`, where the `xᵢ` are the fresh
-      -- metavariables in `args`.
+      -- 将目标赋值为 `e x₁ ... xₙ`，其中 `xᵢ` 是 `args` 中的新元变量。
       goal.assign (mkAppN e args)
-      -- `isDefEq` may have assigned some of the `args`. Report the rest as new
-      -- goals.
+      -- `isDefEq` 可能已经为 `args` 中的某些变量赋值。报告剩下的作为新的目标。
       let newGoals ← args.filterMapM λ mvar => do
         let mvarId := mvar.mvarId!
         if ! (← mvarId.isAssigned) && ! (← mvarId.isDelayedAssigned) then
@@ -920,14 +768,12 @@ def myApply (goal : MVarId) (e : Expr) : MetaM (List MVarId) := do
         else
           return none
       return newGoals.toList
-    -- If the conclusion does not unify with the target, throw an error.
+    -- 如果结论与目标不统一，则抛出错误。
     else
-      throwTacticEx `myApply goal m!"{e} is not applicable to goal with target {target}"
+      throwTacticEx `myApply goal m!"{e} 无法应用于目标，目标类型为 {target}"
 
 /-!
-The real `apply` does some additional pre- and postprocessing, but the core
-logic is what we show here. To test our tactic, we need an elaboration
-incantation, more about which in the Elaboration chapter.
+真正的 `apply` 进行了一些额外的前处理和后处理，但核心逻辑就是我们在这里展示的内容。要测试我们的策略，我们需要一点繁饰的相关内容，等到繁饰章节中讨论。
 -/
 
 elab "myApply" e:term : tactic => do
@@ -940,35 +786,22 @@ example (h : α → β) (a : α) : β := by
 
 
 /-!
-## Backtracking
+## 回溯
 
-Many tactics naturally require backtracking: the ability to go back to a
-previous state, as if the tactic had never been executed. A few examples:
+许多策略自然需要回溯的能力：也就是能够回到先前的状态，就像策略从未执行过一样。以下是一些例子：
 
-- `first | t | u` first executes `t`. If `t` fails, it backtracks and executes
-  `u`.
-- `try t` executes `t`. If `t` fails, it backtracks to the initial state,
-  erasing any changes made by `t`.
-- `trivial` attempts to solve the goal using a number of simple tactics
-  (e.g. `rfl` or `contradiction`). After each unsuccessful application of such a
-  tactic, `trivial` backtracks.
+- `first | t | u` 首先执行 `t`，如果 `t` 失败，则回溯并执行 `u`。
+- `try t` 执行 `t`，如果 `t` 失败，则回溯到初始状态，撤销 `t` 所做的任何更改。
+- `trivial` 试图使用一些简单的策略（例如 `rfl` 或 `contradiction`）解决目标。每次应用这些策略失败后，`trivial` 都会回溯。
 
-Good thing, then, that Lean's core data structures are designed to enable easy
-and efficient backtracking. The corresponding API is provided by the
-`Lean.MonadBacktrack` class. `MetaM`, `TermElabM` and `TacticM` are all
-instances of this class. (`CoreM` is not but could be.)
+幸运的是，Lean 的核心数据结构设计使得回溯变得轻松且高效。相应的 API 由 `Lean.MonadBacktrack` 类提供。`MetaM`、`TermElabM` 和 `TacticM` 都是此类的实例。（`CoreM` 不是，但可以是。）
 
-`MonadBacktrack` provides two fundamental operations:
+`MonadBacktrack` 提供了两个基本操作：
 
-- `Lean.saveState : m s` returns a representation of the current state, where
-  `m` is the monad we are in and `s` is the state type. E.g. for `MetaM`,
-  `saveState` returns a `Lean.Meta.SavedState` containing the current
-  environment, the current `MetavarContext` and various other pieces of
-  information.
-- `Lean.restoreState : s → m Unit` takes a previously saved state and restores
-  it. This effectively resets the compiler state to the previous point.
+- `Lean.saveState : m s` 返回当前状态的表示，其中 `m` 是我们所在的 monad，`s` 是状态类型。例如，对于 `MetaM`，`saveState` 返回一个包含当前环境、当前 `MetavarContext` 以及其他各种信息的 `Lean.Meta.SavedState`。
+- `Lean.restoreState : s → m Unit` 接受先前保存的状态并恢复它。这实际上将编译器状态重置为之前的某个点。
 
-With this, we can roll our own `MetaM` version of the `try` tactic:
+通过这些操作，我们可以编写自己的 `MetaM` 版本的 `try` 策略：
 -/
 
 def tryM (x : MetaM Unit) : MetaM Unit := do
@@ -979,29 +812,19 @@ def tryM (x : MetaM Unit) : MetaM Unit := do
     restoreState s
 
 /-!
-We first save the state, then execute `x`. If `x` fails, we backtrack the state.
+我们首先保存状态，然后执行 `x`。如果 `x` 失败，我们会回溯状态。
 
-The standard library defines many combinators like `tryM`. Here are the most
-useful ones:
+标准库定义了许多类似 `tryM` 的组合器，以下是最有用的一些：
 
-- `Lean.withoutModifyingState (x : m α) : m α` executes the action `x`, then
-  resets the state and returns `x`'s result. You can use this, for example, to
-  check for definitional equality without assigning metavariables:
+- `Lean.withoutModifyingState (x : m α) : m α` 执行动作 `x`，然后重置状态并返回 `x` 的结果。你可以使用这个方法来检查定义等同性，而不赋值元变量：
   ```lean
   withoutModifyingState $ isDefEq x y
   ```
-  If `isDefEq` succeeds, it may assign metavariables in `x` and `y`. Using
-  `withoutModifyingState`, we can make sure this does not happen.
-- `Lean.observing? (x : m α) : m (Option α)` executes the action `x`. If `x`
-  succeeds, `observing?` returns its result. If `x` fails (throws an exception),
-  `observing?` backtracks the state and returns `none`. This is a more
-  informative version of our `tryM` combinator.
-- `Lean.commitIfNoEx (x : α) : m α` executes `x`. If `x` succeeds,
-  `commitIfNoEx` returns its result. If `x` throws an exception, `commitIfNoEx`
-  backtracks the state and rethrows the exception.
+  如果 `isDefEq` 成功，它可能会为 `x` 和 `y` 赋值元变量。使用 `withoutModifyingState`，我们可以确保这种情况不会发生。
+- `Lean.observing? (x : m α) : m (Option α)` 执行动作 `x`。如果 `x` 成功，`observing?` 返回其结果。如果 `x` 失败（抛出异常），`observing?` 会回溯状态并返回 `none`。这是 `tryM` 组合器的一个更具信息性的版本。
+- `Lean.commitIfNoEx (x : α) : m α` 执行 `x`。如果 `x` 成功，`commitIfNoEx` 返回其结果。如果 `x` 抛出异常，`commitIfNoEx` 会回溯状态并重新抛出异常。
 
-Note that the builtin `try ... catch ... finally` does not perform any
-backtracking. So code which looks like this is probably wrong:
+注意，内置的 `try ... catch ... finally` 不会执行任何回溯。因此，像这样的代码可能是错误的：
 
 ```lean
 try
@@ -1010,9 +833,7 @@ catch e =>
   doSomethingElse
 ```
 
-The `catch` branch, `doSomethingElse`, is executed in a state containing
-whatever modifications `doSomething` made before it failed. Since we probably
-want to erase these modifications, we should write instead:
+在 `catch` 分支中，`doSomethingElse` 在包含 `doSomething` 失败前所做的修改的状态下执行。由于我们可能希望删除这些修改，我们应写成：
 
 ```lean
 try
@@ -1021,18 +842,9 @@ catch e =>
   doSomethingElse
 ```
 
-Another `MonadBacktrack` gotcha is that `restoreState` does not backtrack the
-*entire* state. Caches, trace messages and the global name generator, among
-other things, are not backtracked, so changes made to these parts of the state
-are not reset by `restoreState`. This is usually what we want: if a tactic
-executed by `observing?` produces some trace messages, we want to see them even
-if the tactic fails. See `Lean.Meta.SavedState.restore` and `Lean.Core.restore`
-for details on what is and is not backtracked.
+另一个与 `MonadBacktrack` 相关的问题是，`restoreState` 并不会回溯*整个*状态。缓存、跟踪消息和全局名称生成器等内容不会被回溯，因此对这些状态部分的更改不会被 `restoreState` 重置。这通常是我们想要的：如果通过 `observing?` 执行的策略产生了一些跟踪消息，我们希望即使该策略失败也能看到这些消息。有关哪些内容会被回溯、哪些不会，请参阅 `Lean.Meta.SavedState.restore` 和 `Lean.Core.restore`。
 
-In the next chapter, we move towards the topic of elaboration, of which
-you've already seen several glimpses in this chapter. We start by discussing
-Lean's syntax system, which allows you to add custom syntactic constructs to the
-Lean parser.
+在下一章中，我们将进入繁饰主题，你在本章中已经多次见到它的几个方面。我们首先讨论 Lean 的语法系统，它允许你向 Lean 的解析器添加自定义语法结构。
 
 ## 习题
 
@@ -1128,15 +940,15 @@ Lean parser.
       dbg_trace (← ppExpr reducedExpr) -- ...
     ```
 10. [**构建表达式**] 通过两种方式创建表达式 `fun x, 1 + x`：
-  **a)** not idiomatically, with loose bound variables
-  **b)** idiomatically.
-  你可以在哪种方式中使用 `Lean.mkAppN`? 还有 `Lean.Meta.mkAppM`?
+  **a)** 以非惯用方式：使用松弛绑定变量；
+  **b)** 以惯用方式。
+  你可以在哪种方式中使用 `Lean.mkAppN`? 还有 `Lean.Meta.mkAppM`？
 11. [**构建表达式**] 创建表达式 `∀ (yellow: Nat), yellow`。
 12. [**构建表达式**] 通过两种方式创建表达式 `∀ (n : Nat), n = n + 1`：
-  **a)** not idiomatically, with loose bound variables
-  **b)** idiomatically.
-  In what version can you use `Lean.mkApp3`? In what version can you use `Lean.Meta.mkEq`?
-13. [**构建表达式**] 创建表达式 `fun (f : Nat → Nat), ∀ (n : Nat), f n = f (n + 1)` idiomatically.
+  **a)** 以非惯用方式：使用松弛绑定变量；
+  **b)** 以惯用方式。
+  哪种情形下可以使用 `Lean.mkApp3`？还有 `Lean.Meta.mkEq`？
+13. [**构建表达式**] 以惯用方式创建表达式 `fun (f : Nat → Nat), ∀ (n : Nat), f n = f (n + 1)`。
 14. [**构建表达式**] 你预计下面的代码会有怎么样的输出？
 
     ```lean

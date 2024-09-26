@@ -1,10 +1,13 @@
-# A Lean 4 Metaprogramming Book
+# Lean 4 元编程
 
 Authors: Arthur Paulino, Damiano Testa, Edward Ayers, Evgenia Karunus, Henrik Böving, Jannis Limperg, Siddhartha Gadgil, Siddharth Bhat
 
-* The textbook in html format is [here](https://leanprover-community.github.io/lean4-metaprogramming-book/).
+译者：[subfish_zhou](https://github.com/subfish-zhou)
 
-* A PDF is [available here for download](../../releases/download/latest/Metaprogramming.in.Lean.4.pdf) (and is rebuilt on each change).
+* The textbook in html format is [here](https://leanprover-community.github.io/lean4-metaprogramming-book/).
+* 中文版网页链接在[这里](https://www.leanprover.cn/mp-lean-zh/)
+
+* A PDF is [available here for download](../../releases/download/latest/Metaprogramming.in.Lean.4.pdf) (中文版PDF会乱码).
 
 ## Contributing
 
