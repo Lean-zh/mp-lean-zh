@@ -83,7 +83,7 @@ notation:65 lhs:65 " ~ " rhs:65 => (lhs - rhs)
 notation:65 a:65 " ~ " b:65 " mod " rel:65 => rel a b
 
 /-
-Lean 会优先选择这种符号，而不是先解析为上面定义的 `a ~ b`，然后因为不知道如何处理 `mod` 和等价关系参数而报错。
+Lean 会优先选择这种符号，如果先解析为上面定义的 `a ~ b`，那么它就会因为不知道如何处理 `mod` 和等价关系参数而报错。
 -/
 
 #check 0 ~ 0 mod Eq -- 0 = 0 : Prop

@@ -379,7 +379,7 @@ abbrev             reducibleDef   : Nat      := defaultDef + 1
 如果我们重复上述命令，并让 Lean 打印出隐式参数，我们可以看到 `+` 符号实际上是 `hAdd` 函数的应用，而该函数是 `HAdd` 类型类的一个成员：
 -/
 
-set_option pp.explicit true
+set_option pp.explicit true in
 #eval traceConstWithTransparency .reducible ``reducibleDef
 -- @HAdd.hAdd Nat Nat Nat (@instHAdd Nat instAddNat) defaultDef 1
 
