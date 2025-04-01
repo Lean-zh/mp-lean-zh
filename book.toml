@@ -15,7 +15,7 @@ additional-js = [
 ]
 
 # Settings to overwrite the edit button and make it a code execution button.
-edit-url-template = "https://raw.githubusercontent.com/leanprover-community/lean4-metaprogramming-book/master/{path}"
+# edit-url-template = "https://raw.githubusercontent.com/Lean-zh/mp-lean-zh/master/{path}"
 
 # To ensure that the 404 page functions properly.
-site-url = "https://github.com/Lean-zh/mp-lean-zh"
+# site-url = "https://github.com/Lean-zh/mp-lean-zh"
