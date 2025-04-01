@@ -185,21 +185,21 @@ TODO：定义一个 `conjecture` 声明，类似于 `lemma/theorem`，不同之�
 添加新的项繁饰器的工作方式与添加新的命令繁饰器基本相同，因此我们只会简要地看一下：
 -/
 
-syntax (name := myterm1) "myterm 1" : term
+syntax (name := myterm1) "myterm_1" : term
 
 def mytermValues := [1, 2]
 
 @[term_elab myterm1]
-def myTerm1Impl : TermElab := fun stx type? =>
+def myTerm1Impl : TermElab := fun stx type? => do
   mkAppM ``List.get! #[.const ``mytermValues [], mkNatLit 0] -- `MetaM` code
 
-#eval myterm 1 -- 1
+#eval myterm_1 -- 1
 
 -- 用 `elab` 亦可
-elab "myterm 2" : term => do
+elab "myterm_2" : term => do
   mkAppM ``List.get! #[.const ``mytermValues [], mkNatLit 1] -- `MetaM` code
 
-#eval myterm 2 -- 2
+#eval myterm_2 -- 2
 
 /-!
 ### 项目示例

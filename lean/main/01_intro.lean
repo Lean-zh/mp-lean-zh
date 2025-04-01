@@ -87,10 +87,20 @@ elab "#assertType " termStx:term " : " typeStx:term : command =>
 
 /-- info: success -/
 #guard_msgs in --#
-#assertType 5  : Nat
+#assertType 5 : Nat
 
-/-- error: failure -/
-#guard_msgs in --#
+-- don't display names of metavariables
+set_option pp.mvars false in
+
+/--
+error: type mismatch
+  []
+has type
+  List ?_ : Type _
+but is expected to have type
+  Nat : Type
+-/
+#guard_msgs (error) in --#
 #assertType [] : Nat
 
 /-!

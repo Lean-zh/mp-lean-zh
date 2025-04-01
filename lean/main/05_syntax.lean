@@ -376,7 +376,7 @@ infix:50 " ⊆ " => Subset.subset
 -- 也就是对其元素类型的一个简单谓词
 def Set (α : Type u) := α → Prop
 
-def Set.mem (x : α) (X : Set α) : Prop := X x
+def Set.mem (X : Set α) (x : α) : Prop := X x
 
 -- 集成到已存在的成员符号类型类中
 instance : Membership α (Set α) where
@@ -479,13 +479,13 @@ example : 2 ∈ { (y : Nat) | y ≤ 3 ∧ 1 ≤ y } := by simp[Membership.mem, S
     使用以下模板：
 
     ```lean
-    import Std.Classes.SetNotation
-    import Std.Util.ExtendedBinder
+    import Batteries.Classes.SetNotation
+    import Batteries.Util.ExtendedBinder
     syntax (name := bigsumin) ...
     -- 繁饰函数将语法注入语义
     @[term_elab bigsumin] def elabSum : TermElab := λ stx tp => return mkNatLit 666
     ```
 
-    提示：使用 `Std.ExtendedBinder.extBinder` 解析器。
-    提示：你需要在 Lean 项目中安装 Std4 才能使这些导入生效。
+    提示：使用 `Batteries.ExtendedBinder.extBinder` 解析器。
+    提示：你需要在 Lean 项目中安装 Batteries 才能使这些导入生效。
 -/

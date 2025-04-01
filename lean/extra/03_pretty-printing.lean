@@ -35,7 +35,7 @@ def foo : Nat → Nat := fun x => 42
 def delabFoo : Delab := do
   `(1)
 
-#check foo -- 1 : Nat → Nat
+#check (foo) -- 1 : Nat → Nat
 #check foo 13 -- 1 : Nat, 整个应用同样被这样打印出来了
 
 /-!
@@ -46,7 +46,7 @@ def delabFoo : Delab := do
 def delabfoo2 : Delab := do
   `(2)
 
-#check foo -- 2 : Nat → Nat
+#check (foo) -- 2 : Nat → Nat
 
 /-!
 确定使用哪个反繁饰器的机制也是相同的。反繁饰器按照注册的相反顺序依次尝试，直到其中一个没有抛出错误，表明它「不对这个 `Expr` 负责」。在反繁饰器的情况下，这是通过使用 `failure` 来完成的：
@@ -57,7 +57,7 @@ def delabfoo3 : Delab := do
   failure
   `(3)
 
-#check foo -- 2 : Nat → Nat, 还是 2 因为 3 失败了
+#check (foo) -- 2 : Nat → Nat, 还是 2 因为 3 失败了
 
 /-!
 为了为 `foo` 编写一个合适的反繁饰器，我们将不得不使用一些稍微高级一点的机制：
@@ -72,7 +72,7 @@ def delabfooFinal : Delab := do
   `($fn $arg)
 
 #check foo 42 -- fooSpecial 42 : Nat
-#check foo -- 2 : Nat → Nat, 还是 2 因为 3 失败了
+#check (foo) -- 2 : Nat → Nat, 还是 2 因为 3 失败了
 
 /-!
 你能扩展 `delabFooFinal` 来处理非完整应用的情况吗？
@@ -91,12 +91,11 @@ def myid {α : Type} (x : α) := x
 @[app_unexpander myid]
 def unexpMyId : Unexpander
   -- 禁用语法卫生，这样我们实际上可以返回 `id`，而不涉及宏范围等。
-  | `(myid $arg) => set_option hygiene false in `(id $arg)
-  | `(myid) => pure $ mkIdent `id
-  | _ => throw ()
+  | `($_myid $arg) => set_option hygiene false in `(id $arg)
+  | `($_myid) => pure $ mkIdent `id
 
 #check myid 12 -- id 12 : Nat
-#check myid -- id : ?m.3870 → ?m.3870
+#check (myid) -- id : ?m.3870 → ?m.3870
 
 /-!
 关于一些反扩展器的不错示例，你可以查看 [NotationExtra](https://github.com/leanprover/lean4/blob/master/src/Init/NotationExtra.lean)
@@ -141,12 +140,12 @@ instance : Coe Ident (TSyntax `lang) where
 
 @[app_unexpander LangExpr.numConst]
 def unexpandNumConst : Unexpander
-  | `(LangExpr.numConst $x:num) => `([Lang| $x])
+  | `($_numConst $x:num) => `([Lang| $x])
   | _ => throw ()
 
 @[app_unexpander LangExpr.ident]
 def unexpandIdent : Unexpander
-  | `(LangExpr.ident $x:str) =>
+  | `($_ident $x:str) =>
     let str := x.getString
     let name := mkIdent $ Name.mkSimple str
     `([Lang| $name])
@@ -154,7 +153,7 @@ def unexpandIdent : Unexpander
 
 @[app_unexpander LangExpr.letE]
 def unexpandLet : Unexpander
-  | `(LangExpr.letE $x:str [Lang| $v:lang] [Lang| $b:lang]) =>
+  | `($_letE $x:str [Lang| $v:lang] [Lang| $b:lang]) =>
     let str := x.getString
     let name := mkIdent $ Name.mkSimple str
     `([Lang| let $name := $v in $b])

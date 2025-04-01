@@ -133,6 +133,8 @@ instance : Coe (TSyntax `a) (TSyntax `b) where
 如果我们正在处理 `xs : Array (TSyntax c)` 并且想要将其插入到引号中，有两种主要方法可以实现：
 1. 使用分隔符插入，最常见的是逗号：`` `($xs,*) ``。这也是插入 `TSepArray c ",""` 的方式。
 2. 直接无分隔符插入（TODO）：`` `() ``
+
+例如：
 -/
 
 -- 如果可能的话，在语法上从元组中切掉第一个元素
@@ -312,7 +314,7 @@ macro_rules
 正如在语法章节中所承诺的，这里是绑定 2.0。我们将从重新引入集合理论开始：
 -/
 def Set (α : Type u) := α → Prop
-def Set.mem (x : α) (X : Set α) : Prop := X x
+def Set.mem (X : Set α) (x : α) : Prop := X x
 
 -- 集成到已经存在的成员符号类中
 instance : Membership α (Set α) where

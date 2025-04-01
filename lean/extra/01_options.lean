@@ -44,14 +44,13 @@ set_option pp.explicit true in
 - `LevelElabM`
 - 所有可以提升上述某个类型操作的 monad（例如 `MetaM` 是从 `CoreM` 提升的）
 
-一旦我们有了 `Options` 对象，我们就可以通过 `Options.get` 查询相关信息。
+一旦我们有了 `Options` 对象，我们就可以通过 `Option.get` 查询相关信息。
 为了演示这一点，让我们编写一个命令来打印 `pp.explicit` 的值。
 -/
 
 elab "#getPPExplicit" : command => do
   let opts ← getOptions
-  -- defValue = default value 默认值
-  logInfo s!"pp.explicit : {opts.get pp.explicit.name pp.explicit.defValue}"
+  logInfo s!"pp.explicit : {pp.explicit.get opts}"
 
 #getPPExplicit -- pp.explicit : false
 
