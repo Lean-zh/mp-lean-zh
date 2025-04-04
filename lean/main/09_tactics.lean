@@ -588,10 +588,6 @@ elab "faq_throw_error" : tactic =>
      step_4
    ```
 
-以下是这段内容的翻译：
-
----
-
 2. 在第一个练习中，我们使用了较底层的 `modify` API 来更新我们的目标。`liftMetaTactic`、`setGoals`、`appendGoals`、`replaceMainGoal`、`closeMainGoal` 等都是在 `modify fun s : State => { s with goals := myMvarIds }` 之上的语法糖。请使用以下方法重写 `forker` 策略：
 
   **a)** `liftMetaTactic`
